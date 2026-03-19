@@ -1,0 +1,7 @@
+{
+  "python.defaultInterpreterPath": "py-backend/.venv/Scripts/python.exe",
+  "[python]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "ms-python.python"
+  }
+}

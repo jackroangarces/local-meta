@@ -1,0 +1,11 @@
+{
+  "fetched_at": "2026-03-19T00:00:00Z",
+  "source_url": "https://www.schustats.com/regional_rankings",
+  "regions": [
+    {
+      "region": "Western Washington",
+      "slug": "western-washington",
+      "local_path": "western-washington.png"
+    }
+  ]
+}
