@@ -14,7 +14,6 @@ def list_region_names(db: Session = Depends(get_db)):
     names = list(db.scalars(stmt).all())
     return {"names": names}
 
-# Gets the top 10 players for a given region by current tag
 @router.get("/top-players/current-tags")
 def top_players_current_tags(
     region_name: str = Query(..., description="Region `name` as shown in the regions dropdown"),
@@ -41,7 +40,6 @@ def top_players_current_tags(
         JOIN latest_snapshot ls ON re.snapshot_id = ls.id
         JOIN players p ON p.id = re.player_id
         ORDER BY re.rank ASC
-        -- No LIMIT: return all ranks for the latest snapshot
     """
 
     with engine.connect() as conn:

@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import argparse
-import json
 import re
-from dataclasses import dataclass, asdict
-from pathlib import Path
+from dataclasses import dataclass
 from typing import List
 
 BASE_URL = "https://www.supermajor.gg"
@@ -73,7 +70,12 @@ def extract_top_four_ids(html_text: str) -> list[str]:
         raise ValueError('Could not find "Last 6 Mo" order array.')
 
     order_blob = order_match.group(1)
-    char_ids = re.findall(r'(?:\\"|")(A\d+)(?:\\"|")', order_blob)
+    # Allow optional underscore suffixes like "A1321_4" in the payload (account for alt costumes)
+    # Capture either "A####" or "A####_#" from the escaped/quoted array.
+    char_ids = re.findall(
+        r'(?:\\"|")((?:A\d+)(?:_\d+)?)(?:\\"|")',
+        order_blob,
+    )
     if len(char_ids) < 4:
         raise ValueError(f"Expected at least 4 character IDs, found {len(char_ids)}.")
 
@@ -109,46 +111,19 @@ def scrape_last_6mo_character_usage(current_tag: str, supermajor_id: int | str) 
     top_four_ids = extract_top_four_ids(html_text)
 
     results: List[CharacterUsage] = []
-    for char_id in top_four_ids:
-        play_percent, games_played = extract_character_stats(html_text, char_id)
+    for raw_char_id in top_four_ids:
+        # Stats extraction must use the full id (e.g. "A1321_4" if present).
+        # But we normalize the stored identifier to the base form (e.g. "A1321").
+        base_char_id = raw_char_id.split("_", 1)[0]
+
+        play_percent, games_played = extract_character_stats(html_text, raw_char_id)
         results.append(
             CharacterUsage(
-                image_identifier=char_id,
+                image_identifier=base_char_id,
                 play_percent=play_percent,
                 games_played=games_played,
             )
         )
 
     return results
-
-
-def _default_output_path(current_tag: str, supermajor_id: int | str) -> Path:
-    safe_tag = re.sub(r"[^A-Za-z0-9._-]+", "-", current_tag).strip("-") or "player"
-    out_dir = Path("data") / "player-character-usage"
-    return out_dir / f"{safe_tag}-S{supermajor_id}.json"
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Fetch Last 6 Mo top-4 character usage for a supermajor.gg player."
-    )
-    parser.add_argument("current_tag", help="Player current_tag (e.g. Clune)")
-    parser.add_argument("supermajor_id", type=int, help="supermajor numeric id (without leading S)")
-    parser.add_argument(
-        "--output",
-        "-o",
-        type=Path,
-        default=None,
-        help="Output JSON file path (default: data/player-character-usage/<tag>-S<id>.json)",
-    )
-    args = parser.parse_args()
-
-    data = scrape_last_6mo_character_usage(args.current_tag, args.supermajor_id)
-    payload = [asdict(row) for row in data]
-
-    output_path = args.output or _default_output_path(args.current_tag, args.supermajor_id)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    print(output_path)
-
     
