@@ -47,13 +47,12 @@ CREATE TABLE IF NOT EXISTS character_usage (
     id BIGSERIAL PRIMARY KEY,
     snapshot_id BIGINT NOT NULL REFERENCES ranking_snapshots(id) ON DELETE CASCADE,
     player_id BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-    image_identifier VARCHAR(32) NOT NULL,
     character_id DOUBLE PRECISION NOT NULL,
     character_name VARCHAR(100) NOT NULL,
     play_percent INTEGER NOT NULL,
     games_played INTEGER NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (snapshot_id, player_id, image_identifier),
+    UNIQUE (snapshot_id, player_id, character_id),
     CHECK (play_percent >= 0 AND play_percent <= 100),
     CHECK (games_played >= 0)
 );

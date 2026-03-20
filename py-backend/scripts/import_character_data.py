@@ -23,7 +23,7 @@ def get_character_decoder_template() -> dict[str, tuple[float, str]]:
         "A1286": (7, "Fox"),
         "A1319": (8, "Pikachu"),
         "A1301": (9, "Luigi"),
-        "A1313": (10, "Ness"), #img to here
+        "A1313": (10, "Ness"),
         "A1274": (11, "Captain Falcon"),
         "A1293": (12, "Jigglypuff"),
         "A1317": (13, "Peach"),
@@ -35,12 +35,12 @@ def get_character_decoder_template() -> dict[str, tuple[float, str]]:
         "A1282": (18, "Dr. Mario"),
         "A1318": (19, "Pichu"),
         "A1285": (20, "Falco"),
-        "A1323": (21, "Marth"),
-        "A1332": (21.1, "Lucina"),
-        "A1338": (22, "Young Link"),
-        "A1332": (23, "Ganondorf"),
-        "A1323": (24, "Mewtwo"),
-        "A1338": (25, "Roy"),
+        "A1304": (21, "Marth"),
+        "A1300": (21.1, "Lucina"),
+        "A1339": (22, "Young Link"),
+        "A1287": (23, "Ganondorf"),
+        "A1310": (24, "Mewtwo"),
+        "A1326": (25, "Roy"), #img to here
         "A1332": (25.1, "Chrom"),
         "A1338": (26, "Mr. Game and Watch"),
         "A1323": (27, "Meta Knight"),
@@ -116,63 +116,44 @@ def decode_character(image_identifier: str) -> tuple[float, str]:
     raise ValueError(f"Unexpected character image identifier format: {image_identifier}")
 
 
-def _get_character_usage_columns(conn) -> set[str]:
-    rows = conn.execute(
-        text(
-            """
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_schema = 'public'
-              AND table_name = 'character_usage'
-            """
-        )
-    ).all()
-    return {r[0] for r in rows}
-
-
 def _insert_character_usage(
     conn,
     *,
     snapshot_id: int,
     player_id: int,
-    image_identifier: str,
     play_percent: int,
     games_played: int,
-    character_id: float | None,
-    character_name: str | None,
-    has_character_fields: bool,
+    character_id: float,
+    character_name: str,
 ) -> None:
-    base_columns = ["snapshot_id", "player_id", "image_identifier", "play_percent", "games_played"]
-
-    if has_character_fields:
-        columns = base_columns + ["character_id", "character_name"]
-    else:
-        columns = base_columns
+    columns = [
+        "snapshot_id",
+        "player_id",
+        "play_percent",
+        "games_played",
+        "character_id",
+        "character_name",
+    ]
 
     values: dict[str, Any] = {
         "snapshot_id": snapshot_id,
         "player_id": player_id,
-        "image_identifier": image_identifier,
         "play_percent": play_percent,
         "games_played": games_played,
+        "character_id": character_id,
+        "character_name": character_name,
     }
-    if has_character_fields:
-        values["character_id"] = character_id
-        values["character_name"] = character_name
 
-    # Keep the UPSERT aligned with the expected unique constraint:
-    # UNIQUE (snapshot_id, player_id, image_identifier)
-    conflict_target = "(snapshot_id, player_id, image_identifier)"
+    conflict_target = "(snapshot_id, player_id, character_id)"
 
     update_sets = [
         "play_percent = EXCLUDED.play_percent",
         "games_played = EXCLUDED.games_played",
     ]
-    if has_character_fields:
-        update_sets += [
-            "character_id = EXCLUDED.character_id",
-            "character_name = EXCLUDED.character_name",
-        ]
+    update_sets += [
+        "character_id = EXCLUDED.character_id",
+        "character_name = EXCLUDED.character_name",
+    ]
 
     sql = text(
         f"""
@@ -194,9 +175,6 @@ def import_for_snapshot(snapshot_id: int) -> dict[str, Any]:
     }
 
     with engine.begin() as conn:
-        character_columns = _get_character_usage_columns(conn)
-        has_character_fields = "character_id" in character_columns and "character_name" in character_columns
-
         players = conn.execute(
             text(
                 """
@@ -223,12 +201,10 @@ def import_for_snapshot(snapshot_id: int) -> dict[str, Any]:
                         conn,
                         snapshot_id=snapshot_id,
                         player_id=player_id,
-                        image_identifier=u.image_identifier,
                         play_percent=u.play_percent,
                         games_played=u.games_played,
-                        character_id=character_id if has_character_fields else None,
-                        character_name=character_name if has_character_fields else None,
-                        has_character_fields=has_character_fields,
+                        character_id=character_id,
+                        character_name=character_name,
                     )
                     summary["character_rows_written"] += 1
             except Exception as exc:  # noqa: BLE001
