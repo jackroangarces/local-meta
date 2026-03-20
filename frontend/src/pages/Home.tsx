@@ -121,6 +121,10 @@ export default function Home() {
           </div>
         )}
       </section>
+
+      <footer className="home-page__footer">
+        rankings from schustats, player data from start.gg
+      </footer>
     </main>
   );
 }

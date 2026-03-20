@@ -277,6 +277,14 @@
   min-height: 120px;
 }
 
+.home-page__footer {
+  margin-top: 2rem;
+  padding: 1.25rem 0;
+  border-top: 1px solid var(--border);
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
 .home-page__loading-wrap {
   display: flex;
   justify-content: center;
