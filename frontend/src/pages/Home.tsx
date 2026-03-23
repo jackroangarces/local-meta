@@ -60,9 +60,6 @@ export default function Home() {
 
   return (
     <main className="home-page">
-      <h1 className="home-page__title">Local Meta</h1>
-      <p className="home-page__lead">Select your region to see stats. It's time to stop going 0-2.</p>
-
       <div className="home-page__controls">
         <label htmlFor="region-select" className="home-page__label">
           Region
