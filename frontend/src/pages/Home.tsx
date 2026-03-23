@@ -98,6 +98,10 @@ export default function Home() {
         </p>
       )}
 
+      <p className="home-page__disclaimer">
+        Only data within the last 6 months prior to the latest ranking snapshot is considered.
+      </p>
+
       <section className="home-page__dashboard-section" aria-label="Region dashboard">
         {activeRegion != null && statsLoading && (
           <div className="home-page__loading-wrap">

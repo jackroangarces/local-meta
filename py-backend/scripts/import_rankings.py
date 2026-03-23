@@ -124,10 +124,12 @@ def parse_date_from_filename(filename: str):
     return datetime.strptime(name, "%B %d, %Y").date()
 
 if __name__ == "__main__":
-    csv_path = Path("data/reviewed/rankings/western-washington/March 16, 2026.csv")
+    csv_path = Path("data/reviewed/rankings/georgia/March 16, 2026.csv")
+    region_slug = csv_path.parent.name
+    region_name = " ".join(word.capitalize() for word in region_slug.replace("-", " ").split())
     import_csv(
         csv_path=csv_path,
-        region_slug="western-washington",
-        region_name="Western Washington",
+        region_slug=region_slug,
+        region_name=region_name,
         ranking_date=parse_date_from_filename(csv_path.name),
     )

@@ -11,7 +11,7 @@ export function TopPlayersCurrentTagsCard({ region, data }: Props) {
   return (
     <article className="dashboard-card">
       <h2 className="dashboard-card__title">Top Players</h2>
-      <p className="dashboard-card__meta">{region}</p>
+      <p className="dashboard-card__meta">Based on SchuStats power ratings in {region}</p>
 
       <ol className="dashboard-card__list dashboard-card__list--scroll">
         {topPlayers.length === 0 ? (

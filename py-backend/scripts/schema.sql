@@ -1,8 +1,3 @@
--- LocalMeta Smash DB schema (for pgAdmin)
--- Derived from:
--- - scripts/import_rankings.py (writes regions, ranking_snapshots, players, ranking_entries)
--- - scripts/fetch_character_data.py + scripts/import_character_data.py (writes character_usage for Last 6 Months top 4)
-
 CREATE TABLE IF NOT EXISTS regions (
     id BIGSERIAL PRIMARY KEY,
     slug VARCHAR(255) NOT NULL UNIQUE,
@@ -36,18 +31,11 @@ CREATE TABLE IF NOT EXISTS ranking_entries (
     UNIQUE (snapshot_id, rank)
 );
 
--- Top 4 character usage per player inside a snapshot.
--- Values are sourced from:
--- scripts/fetch_character_data.py:
---   - image_identifier (e.g. "A1332")
---   - play_percent (int)
---   - games_played (int)
--- and decoded by scripts/import_character_data.py into character_id/name.
 CREATE TABLE IF NOT EXISTS character_usage (
     id BIGSERIAL PRIMARY KEY,
     snapshot_id BIGINT NOT NULL REFERENCES ranking_snapshots(id) ON DELETE CASCADE,
     player_id BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-    character_id DOUBLE PRECISION NOT NULL,
+    character_id NUMERIC(4,1) NOT NULL,
     character_name VARCHAR(100) NOT NULL,
     play_percent INTEGER NOT NULL,
     games_played INTEGER NOT NULL,

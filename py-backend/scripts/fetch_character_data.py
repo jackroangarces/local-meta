@@ -76,8 +76,8 @@ def extract_top_four_ids(html_text: str) -> list[str]:
         r'(?:\\"|")((?:A\d+)(?:_\d+)?)(?:\\"|")',
         order_blob,
     )
-    if len(char_ids) < 4:
-        raise ValueError(f"Expected at least 4 character IDs, found {len(char_ids)}.")
+    if not char_ids:
+        raise ValueError("Could not find any character IDs in Last 6 Mo order array.")
 
     return char_ids[:4]
 

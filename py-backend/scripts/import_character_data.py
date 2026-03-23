@@ -87,7 +87,7 @@ def get_character_decoder_template() -> dict[str, tuple[float, str]]:
         "A1407": (67, "King K. Rool"),  
         "A1413": (68, "Isabelle"),
         "A1406": (69, "Incineroar"),
-        "A1441": (70, "Pirhana Plant"),
+        "A1441": (70, "Piranha Plant"),
         "A1453": (71, "Joker"),
         "A1526": (72, "Hero"),
         "A1530": (73, "Banjo & Kazooie"),
@@ -178,7 +178,7 @@ def import_for_snapshot(snapshot_id: int) -> dict[str, Any]:
         players = conn.execute(
             text(
                 """
-                SELECT DISTINCT
+                SELECT
                     re.player_id,
                     p.current_tag,
                     p.supermajor_player_id
@@ -197,6 +197,9 @@ def import_for_snapshot(snapshot_id: int) -> dict[str, Any]:
                 usages = scrape_last_6mo_character_usage(current_tag, supermajor_player_id)
                 for u in usages:
                     character_id, character_name = decode_character(u.image_identifier)
+                    # Skip random
+                    if character_id >= 1000:
+                        continue
                     _insert_character_usage(
                         conn,
                         snapshot_id=snapshot_id,
@@ -208,6 +211,10 @@ def import_for_snapshot(snapshot_id: int) -> dict[str, Any]:
                     )
                     summary["character_rows_written"] += 1
             except Exception as exc:
+                # Temporary upstream issue: some player pages currently do not return
+                # "Last 6 Mo" character data. Skip those players and continue.
+                if 'Could not find "Last 6 Mo" block start.' in str(exc):
+                    continue
                 summary["errors"].append(
                     {
                         "player_id": player_id,
