@@ -3,6 +3,7 @@ import { DashboardCards } from "../components/dashboard/DashboardCards";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 type RegionsNamesResponse = { names: string[] };
+type LatestSnapshotResponse = { snapshot_id: number | null; ranking_date: string | null };
 
 const API_BASE = "/api";
 
@@ -14,6 +15,7 @@ export default function Home() {
   const [activeRegion, setActiveRegion] = useState<string | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [dashboardKey, setDashboardKey] = useState(0);
+  const [activeRankingDate, setActiveRankingDate] = useState<string | null>(null);
 
   const onAllQueriesComplete = useCallback(() => {
     setStatsLoading(false);
@@ -58,6 +60,47 @@ export default function Home() {
     setDashboardKey((k) => k + 1);
   };
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadLatestSnapshotDate() {
+      if (!activeRegion) {
+        setActiveRankingDate(null);
+        return;
+      }
+
+      try {
+        const params = new URLSearchParams({ region_name: activeRegion });
+        const res = await fetch(`${API_BASE}/regions/latest-snapshot?${params.toString()}`);
+        if (!res.ok) {
+          throw new Error(`Request failed (${res.status})`);
+        }
+        const data: LatestSnapshotResponse = await res.json();
+        if (!cancelled) {
+          setActiveRankingDate(data.ranking_date);
+        }
+      } catch {
+        if (!cancelled) {
+          setActiveRankingDate(null);
+        }
+      }
+    }
+
+    loadLatestSnapshotDate();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRegion]);
+
+  const formattedRankingDate =
+    activeRankingDate != null
+      ? new Date(`${activeRankingDate}T00:00:00`).toLocaleDateString("en-US", {
+          month: "long",
+          day: "numeric",
+          year: "numeric",
+        })
+      : null;
+
   return (
     <main className="home-page">
       <div className="home-page__controls">
@@ -99,7 +142,9 @@ export default function Home() {
       )}
 
       <p className="home-page__disclaimer">
-        Only data within the last 6 months prior to the latest ranking snapshot is considered.
+        {formattedRankingDate == null
+          ? "Only offline data within the last 6 months prior to the latest ranking snapshot is considered."
+          : `Only offline data within the last 6 months prior to the latest ranking snapshot: ${formattedRankingDate} is considered.`}
       </p>
 
       <section className="home-page__dashboard-section" aria-label="Region dashboard">
@@ -124,7 +169,12 @@ export default function Home() {
       </section>
 
       <footer className="home-page__footer">
-        rankings from schustats, player data from start.gg
+        rankings from schustats, player data from start.gg, winrates from smashmate via pheasantzelda
+        <br />
+        created by{" "}
+        <a href="https://jrgarces.vercel.app/" target="_blank" rel="noreferrer">
+          Jack Garces
+        </a>
       </footer>
     </main>
   );

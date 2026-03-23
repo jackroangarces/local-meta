@@ -211,6 +211,11 @@ p {
   font-size: 0.95rem;
 }
 
+.home-page__footer a,
+.home-page__footer a:visited {
+  color: #83c0f6;
+}
+
 .home-page__loading-wrap {
   display: flex;
   justify-content: center;

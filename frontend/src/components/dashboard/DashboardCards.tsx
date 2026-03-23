@@ -4,10 +4,14 @@ import { MostMainedCharactersCard } from "./MostMainedCharactersCard";
 import { MostBattledCharactersCard } from "./MostBattledCharactersCard";
 import { LeastAppearancesCharactersCard } from "./LeastAppearancesCharactersCard";
 import { UnusedCharactersCard } from "./UnusedCharactersCard";
+import { UpcomingEventsCard } from "./UpcomingEventsCard";
+import { BestMatchupsCard } from "./BestMatchupsCard";
 import { fetchRegionMostMainedCharactersCard, fetchRegionTopPlayersCurrentTagsCard } from "./cardQueries";
 import { fetchRegionMostBattledCharactersCard } from "./cardQueries";
 import { fetchRegionLeastAppearancesCharactersCard } from "./cardQueries";
 import { fetchRegionUnusedCharactersCard } from "./cardQueries";
+import { fetchRegionUpcomingEventsCard } from "./cardQueries";
+import { fetchRegionBestMatchupsCard } from "./cardQueries";
 
 export type DashboardCardsProps = {
   region: string;
@@ -20,6 +24,8 @@ type DashboardData = {
   mostBattledCharacters: Awaited<ReturnType<typeof fetchRegionMostBattledCharactersCard>>;
   leastAppearancesCharacters: Awaited<ReturnType<typeof fetchRegionLeastAppearancesCharactersCard>>;
   unusedCharacters: Awaited<ReturnType<typeof fetchRegionUnusedCharactersCard>>;
+  upcomingEvents: Awaited<ReturnType<typeof fetchRegionUpcomingEventsCard>>;
+  bestMatchups: Awaited<ReturnType<typeof fetchRegionBestMatchupsCard>>;
 };
 
 export function DashboardCards({ region, onAllQueriesComplete }: DashboardCardsProps) {
@@ -31,13 +37,15 @@ export function DashboardCards({ region, onAllQueriesComplete }: DashboardCardsP
     async function load() {
       setData(null);
       try {
-        const [topPlayersResult, mostMainedResult, mostBattledResult, leastAppearancesResult, unusedResult] =
+        const [topPlayersResult, mostMainedResult, mostBattledResult, leastAppearancesResult, unusedResult, upcomingEventsResult, bestMatchupsResult] =
           await Promise.allSettled([
             fetchRegionTopPlayersCurrentTagsCard(region),
             fetchRegionMostMainedCharactersCard(region),
             fetchRegionMostBattledCharactersCard(region),
             fetchRegionLeastAppearancesCharactersCard(region),
             fetchRegionUnusedCharactersCard(region),
+            fetchRegionUpcomingEventsCard(region),
+            fetchRegionBestMatchupsCard(region),
           ]);
 
         const topPlayers =
@@ -59,6 +67,10 @@ export function DashboardCards({ region, onAllQueriesComplete }: DashboardCardsP
 
         const unusedCharacters =
           unusedResult.status === "fulfilled" ? unusedResult.value : { unusedCharacters: [] };
+        const upcomingEvents =
+          upcomingEventsResult.status === "fulfilled" ? upcomingEventsResult.value : { tournaments: [] };
+        const bestMatchups =
+          bestMatchupsResult.status === "fulfilled" ? bestMatchupsResult.value : { bestMatchups: [] };
 
         if (!cancelled) {
           setData({
@@ -67,6 +79,8 @@ export function DashboardCards({ region, onAllQueriesComplete }: DashboardCardsP
             mostBattledCharacters,
             leastAppearancesCharacters,
             unusedCharacters,
+            upcomingEvents,
+            bestMatchups,
           });
         }
       } catch {
@@ -78,6 +92,8 @@ export function DashboardCards({ region, onAllQueriesComplete }: DashboardCardsP
             mostBattledCharacters: { mostBattledCharacters: [] },
             leastAppearancesCharacters: { leastAppearancesCharacters: [] },
             unusedCharacters: { unusedCharacters: [] },
+            upcomingEvents: { tournaments: [] },
+            bestMatchups: { bestMatchups: [] },
           });
         }
       } finally {
@@ -100,7 +116,9 @@ export function DashboardCards({ region, onAllQueriesComplete }: DashboardCardsP
   return (
     <div className="home-page__dashboard">
       <TopPlayersCurrentTagsCard region={region} data={data.topPlayers} />
+      <UpcomingEventsCard region={region} data={data.upcomingEvents} />
       <MostMainedCharactersCard region={region} data={data.mostMainedCharacters} />
+      <BestMatchupsCard region={region} data={data.bestMatchups} />
       <MostBattledCharactersCard region={region} data={data.mostBattledCharacters} />
       <LeastAppearancesCharactersCard
         region={region}

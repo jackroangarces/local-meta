@@ -39,7 +39,7 @@ export async function fetchRegionMostMainedCharactersCard(
   }>;
 }> {
   const API_BASE = "/api";
-  const params = new URLSearchParams({ region_name: region });
+  const params = new URLSearchParams({ region_name: region, limit: "10" });
   const res = await fetch(`${API_BASE}/regions/most-mained-characters?${params.toString()}`);
   if (!res.ok) {
     throw new Error(`Request failed (${res.status})`);
@@ -50,6 +50,29 @@ export async function fetchRegionMostMainedCharactersCard(
   } = await res.json();
 
   return { mostMainedCharacters: data.most_mained_characters ?? [] };
+}
+
+export async function fetchRegionBestMatchupsCard(
+  region: string,
+): Promise<{
+  bestMatchups: Array<{
+    character_id: number;
+    character_name: string;
+    efficiency: number;
+  }>;
+}> {
+  const API_BASE = "/api";
+  const params = new URLSearchParams({ region_name: region });
+  const res = await fetch(`${API_BASE}/regions/best-matchups?${params.toString()}`);
+  if (!res.ok) {
+    throw new Error(`Request failed (${res.status})`);
+  }
+
+  const data: {
+    best_matchups: Array<{ character_id: number; character_name: string; efficiency: number }>;
+  } = await res.json();
+
+  return { bestMatchups: data.best_matchups ?? [] };
 }
 
 export async function fetchRegionMostBattledCharactersCard(
@@ -128,4 +151,37 @@ export async function fetchRegionUnusedCharactersCard(
   } = await res.json();
 
   return { unusedCharacters: data.unused_characters ?? [] };
+}
+
+export async function fetchRegionUpcomingEventsCard(
+  region: string,
+): Promise<{
+  tournaments: Array<{
+    id: number | null;
+    name: string;
+    city: string | null;
+    addr_state: string | null;
+    start_at: number | null;
+    slug: string | null;
+    url: string | null;
+  }>;
+}> {
+  const API_BASE = "/api";
+  const params = new URLSearchParams({ region_name: region });
+  const res = await fetch(`${API_BASE}/tournaments/upcoming-events?${params.toString()}`);
+  if (!res.ok) {
+    throw new Error(`Request failed (${res.status})`);
+  }
+  const data: {
+    tournaments: Array<{
+      id: number | null;
+      name: string;
+      city: string | null;
+      addr_state: string | null;
+      start_at: number | null;
+      slug: string | null;
+      url: string | null;
+    }>;
+  } = await res.json();
+  return { tournaments: data.tournaments ?? [] };
 }

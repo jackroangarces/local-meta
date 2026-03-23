@@ -22,7 +22,7 @@ export function TopPlayersCurrentTagsCard({ region, data }: Props) {
               <a
                 href={`https://www.supermajor.gg/ultimate/player/${encodeURIComponent(
                   player.current_tag,
-                )}?id=S${player.supermajor_player_id}`}
+                )}?id=S${player.supermajor_player_id}&offline`}
                 target="_blank"
                 rel="noreferrer"
               >
