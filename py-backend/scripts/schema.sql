@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS players (
     id BIGSERIAL PRIMARY KEY,
     supermajor_player_id BIGINT NOT NULL UNIQUE,
     current_tag VARCHAR(255) NOT NULL,
+    startgg_user_id VARCHAR(64) NULL UNIQUE,
+    startgg_player_id BIGINT NULL UNIQUE,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from typing import List
+from urllib.parse import quote
 
 BASE_URL = "https://www.supermajor.gg"
 
@@ -12,13 +13,11 @@ class CharacterUsage:
     play_percent: int
     games_played: int
 
-def build_player_url(current_tag: str, supermajor_id: int | str) -> str:
-    return f"{BASE_URL}/ultimate/player/{current_tag}?id=S{supermajor_id}"
-
 def fetch_player_html(current_tag: str, supermajor_id: int | str) -> str:
     import requests
 
-    url = build_player_url(current_tag, supermajor_id)
+    path_tag = quote(current_tag, safe="")
+    url = f"{BASE_URL}/ultimate/player/{path_tag}?id=S{supermajor_id}&offline"
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "

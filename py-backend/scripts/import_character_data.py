@@ -8,7 +8,6 @@ from typing import Any
 from sqlalchemy import text
 
 from app.db.database import engine
-
 from scripts.fetch_character_data import scrape_last_6mo_character_usage
 
 def get_character_decoder_template() -> dict[str, tuple[float, str]]:
@@ -65,7 +64,7 @@ def get_character_decoder_template() -> dict[str, tuple[float, str]]:
         "A1336": (47, "Wii Fit Trainer"),
         "A1325": (48, "Rosalina & Luma"),
         "A1297": (49, "Little Mac"),
-        "A1289": (50, "Greninja"), # image to here
+        "A1289": (50, "Greninja"),
         "A1311": (51, "Mii Brawler"),
         "A1414": (52, "Mii Swordfighter"),
         "A1415": (53, "Mii Gunner"),
@@ -169,6 +168,7 @@ def _insert_character_usage(
 def import_for_snapshot(snapshot_id: int) -> dict[str, Any]:
     summary: dict[str, Any] = {
         "snapshot_id": snapshot_id,
+        "source": "scrape",
         "players_processed": 0,
         "character_rows_written": 0,
         "errors": [],
@@ -197,7 +197,6 @@ def import_for_snapshot(snapshot_id: int) -> dict[str, Any]:
                 usages = scrape_last_6mo_character_usage(current_tag, supermajor_player_id)
                 for u in usages:
                     character_id, character_name = decode_character(u.image_identifier)
-                    # Skip random
                     if character_id >= 1000:
                         continue
                     _insert_character_usage(
@@ -211,8 +210,7 @@ def import_for_snapshot(snapshot_id: int) -> dict[str, Any]:
                     )
                     summary["character_rows_written"] += 1
             except Exception as exc:
-                # Temporary upstream issue: some player pages currently do not return
-                # "Last 6 Mo" character data. Skip those players and continue.
+                # Some player pages currently fail to return "Last 6 Mo" data.
                 if 'Could not find "Last 6 Mo" block start.' in str(exc):
                     continue
                 summary["errors"].append(
@@ -228,7 +226,7 @@ def import_for_snapshot(snapshot_id: int) -> dict[str, Any]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Import character usage (top 4) for a snapshot.")
+    parser = argparse.ArgumentParser(description="Import character usage for a snapshot.")
     parser.add_argument("snapshot_id", type=int, help="ranking_snapshots.id")
     args = parser.parse_args()
 
@@ -238,4 +236,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

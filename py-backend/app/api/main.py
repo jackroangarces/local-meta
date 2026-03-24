@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import regions
+from app.api.routes import tournaments
 
 app = FastAPI()
 
@@ -17,6 +18,7 @@ app.add_middleware(
 )
 
 app.include_router(regions.router)
+app.include_router(tournaments.router)
 
 @app.get("/")
 def read_root():

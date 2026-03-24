@@ -1,3 +1,7 @@
+import csv
+import re
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
@@ -57,17 +61,41 @@ def top_players_current_tags(
     return {"top_players": top_players}
 
 
-@router.get("/most-mained-characters")
-def most_mained_characters(
+@router.get("/latest-snapshot")
+def latest_snapshot(
     region_name: str = Query(..., description="Region `name` as shown in the regions dropdown"),
 ):
     """
-    For the latest ranking snapshot in the given region:
-    - For each player, find their max `play_percent` across `character_usage`.
-    - Count every character tied for first place per player.
-    - Return the top 10 characters by number of appearances across players.
+    Return latest ranking snapshot id/date for the given region name.
     """
     order_by = "rs.ranking_date DESC, rs.id DESC"
+    sql = f"""
+        WITH target_region AS (
+            SELECT id
+            FROM regions
+            WHERE name = :region_name
+            ORDER BY id DESC
+            LIMIT 1
+        )
+        SELECT rs.id, rs.ranking_date
+        FROM ranking_snapshots rs
+        JOIN target_region tr ON rs.region_id = tr.id
+        ORDER BY {order_by}
+        LIMIT 1;
+    """
+
+    with engine.connect() as conn:
+        row = conn.execute(text(sql), {"region_name": region_name}).fetchone()
+
+    if row is None:
+        return {"snapshot_id": None, "ranking_date": None}
+
+    return {"snapshot_id": int(row.id), "ranking_date": row.ranking_date.isoformat()}
+
+
+def _query_most_mained_characters(region_name: str, *, limit: int | None = 10) -> list[dict[str, object]]:
+    order_by = "rs.ranking_date DESC, rs.id DESC"
+    limit_sql = "" if limit is None else f"LIMIT {int(limit)}"
 
     sql = f"""
         WITH target_region AS (
@@ -109,22 +137,169 @@ def most_mained_characters(
         FROM player_top_characters ptc
         GROUP BY ptc.character_id, ptc.character_name
         ORDER BY main_count DESC, ptc.character_name ASC
-        LIMIT 10;
+        {limit_sql};
     """
 
     with engine.connect() as conn:
         rows = conn.execute(text(sql), {"region_name": region_name}).all()
 
-    return {
-        "most_mained_characters": [
-            {
-                "character_id": float(r.character_id),
-                "character_name": str(r.character_name),
-                "main_count": int(r.main_count),
-            }
-            for r in rows
-        ]
+    return [
+        {
+            "character_id": float(r.character_id),
+            "character_name": str(r.character_name),
+            "main_count": int(r.main_count),
+        }
+        for r in rows
+    ]
+
+
+@router.get("/most-mained-characters")
+def most_mained_characters(
+    region_name: str = Query(..., description="Region `name` as shown in the regions dropdown"),
+    limit: int = Query(10, ge=1, le=200),
+):
+    return {"most_mained_characters": _query_most_mained_characters(region_name, limit=limit)}
+
+
+def _normalize_char_name(name: str) -> str:
+    s = name.lower().replace("&", "and").replace("/", "").replace(".", "")
+    s = re.sub(r"\(.*?\)", "", s)
+    s = re.sub(r"[^a-z0-9]+", "", s)
+    return s
+
+
+def _best_matchup_aliases(normalized_name: str) -> list[str]:
+    aliases: dict[str, list[str]] = {
+        "samus": ["samusanddarksamus"],
+        "darksamus": ["samusanddarksamus"],
+        "peach": ["peachanddaisy"],
+        "daisy": ["peachanddaisy"],
+        "lucina": ["lucinaecho"],
+        "chrom": ["chromecho"],
+        "pit": ["pitanddarkpit"],
+        "darkpit": ["pitanddarkpit"],
+        "miibrawler": ["miifighterbrawler"],
+        "miiswordfighter": ["miifighterswordfighter"],
+        "miigunner": ["miifightergunner"],
+        "ken": ["kenecho"],
+        "simon": ["simonandrichter"],
+        "richter": ["simonandrichter"],
+        "banjoandkazooie": ["banjo"],
+        "pyramythra": ["aegis"],
     }
+    return aliases.get(normalized_name, [])
+
+
+def _resolve_csv_character_key(name: str, csv_keys: set[str]) -> str | None:
+    normalized = _normalize_char_name(name)
+    for candidate in [normalized, *_best_matchup_aliases(normalized)]:
+        if candidate in csv_keys:
+            return candidate
+    return None
+
+
+def _parse_percent_cell(cell: str) -> float | None:
+    raw = (cell or "").strip().replace("%", "").replace(",", ".")
+    if raw == "":
+        return None
+    try:
+        return float(raw) / 100.0
+    except ValueError:
+        return None
+
+
+def _load_winrate_matrix() -> tuple[list[str], dict[str, dict[str, float]]]:
+    csv_path = Path(__file__).resolve().parents[3] / "data" / "reviewed" / "winrates.csv"
+    with csv_path.open("r", encoding="utf-8-sig", newline="") as f:
+        rows = list(csv.reader(f))
+
+    if len(rows) < 3:
+        return [], {}
+
+    defender_names = [c.strip() for c in rows[0][2:]]
+    defender_keys = [_normalize_char_name(n) for n in defender_names]
+
+    matrix: dict[str, dict[str, float]] = {}
+    for row in rows[2:]:
+        if not row or not row[0].strip():
+            continue
+        attacker_key = _normalize_char_name(row[0].strip())
+        values = row[2:]
+        row_map: dict[str, float] = {}
+        for idx, defender_key in enumerate(defender_keys):
+            if idx >= len(values):
+                break
+            parsed = _parse_percent_cell(values[idx])
+            if parsed is not None:
+                row_map[defender_key] = parsed
+        matrix[attacker_key] = row_map
+
+    return defender_keys, matrix
+
+
+@router.get("/best-matchups")
+def best_matchups(
+    region_name: str = Query(..., description="Region `name` as shown in the regions dropdown"),
+):
+    all_mains = _query_most_mained_characters(region_name, limit=None)
+    if not all_mains:
+        return {"best_matchups": []}
+
+    _, matrix = _load_winrate_matrix()
+    if not matrix:
+        return {"best_matchups": []}
+
+    csv_keys = set(matrix.keys())
+
+    defender_weights: dict[str, int] = {}
+    for row in all_mains:
+        char_name = str(row["character_name"])
+        main_count = int(row["main_count"])
+        defender_key = _resolve_csv_character_key(char_name, csv_keys)
+        if defender_key is None:
+            continue
+        defender_weights[defender_key] = defender_weights.get(defender_key, 0) + main_count
+
+    total_weight = sum(defender_weights.values())
+    if total_weight <= 0:
+        return {"best_matchups": []}
+
+    decoder = get_character_decoder_template()
+    id_by_name: dict[str, float] = {}
+    for char_id, char_name in decoder.values():
+        n = str(char_name)
+        id_by_name[n] = min(float(char_id), id_by_name.get(n, float(char_id)))
+
+    scored: list[dict[str, object]] = []
+    for char_name, char_id in id_by_name.items():
+        attacker_key = _resolve_csv_character_key(char_name, csv_keys)
+        if attacker_key is None:
+            continue
+
+        row = matrix.get(attacker_key, {})
+        weighted_sum = 0.0
+        used_weight = 0
+        for defender_key, weight in defender_weights.items():
+            winrate = row.get(defender_key)
+            if winrate is None:
+                continue
+            weighted_sum += winrate * weight
+            used_weight += weight
+
+        if used_weight == 0:
+            continue
+
+        efficiency = weighted_sum / used_weight
+        scored.append(
+            {
+                "character_id": float(char_id),
+                "character_name": char_name,
+                "efficiency": efficiency,
+            }
+        )
+
+    scored.sort(key=lambda x: (-float(x["efficiency"]), str(x["character_name"])))
+    return {"best_matchups": scored[:10]}
 
 
 @router.get("/most-battled-characters")
