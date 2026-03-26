@@ -57,3 +57,37 @@ CREATE INDEX IF NOT EXISTS ix_character_usage_snapshot_id
 CREATE INDEX IF NOT EXISTS ix_character_usage_player_id
     ON character_usage (player_id);
 
+-- Cached “upset” results for Rising Stars.
+-- One row per qualifying set, keyed by (snapshot_id, set_id) to keep the
+-- computation idempotent.
+CREATE TABLE IF NOT EXISTS upsets (
+    id BIGSERIAL PRIMARY KEY,
+    snapshot_id BIGINT NOT NULL REFERENCES ranking_snapshots(id) ON DELETE CASCADE,
+
+    winner_player_id BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    defeated_player_id BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+
+    set_id BIGINT NOT NULL,
+
+    winner_tag VARCHAR(255) NOT NULL,
+    defeated_tag VARCHAR(255) NOT NULL,
+
+    winner_rank INTEGER NOT NULL,
+    defeated_rank INTEGER NOT NULL,
+
+    upset_factor INTEGER NOT NULL CHECK (upset_factor >= 0),
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT upsets_unique_per_snapshot_set UNIQUE (snapshot_id, set_id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_upsets_snapshot_winner
+    ON upsets (snapshot_id, winner_player_id);
+
+CREATE INDEX IF NOT EXISTS ix_upsets_snapshot_defeated
+    ON upsets (snapshot_id, defeated_player_id);
+
+CREATE INDEX IF NOT EXISTS ix_upsets_snapshot_upset_factor
+    ON upsets (snapshot_id, upset_factor);
+

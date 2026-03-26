@@ -29,10 +29,6 @@ function formatLocation(city: string | null, state: string | null): string {
   return "Location TBD";
 }
 
-function extraNewlineIfSingleLine(shouldAdd: boolean) {
-  return shouldAdd ? <br /> : null;
-}
-
 export function UpcomingEventsCard({ region, data }: Props) {
   const events = data.tournaments ?? [];
 
@@ -53,8 +49,9 @@ export function UpcomingEventsCard({ region, data }: Props) {
                 </a>
               ) : (
                 <span>{event.name}</span>
-              )}{" "}
-              - {formatStartDate(event.start_at)} ({formatLocation(event.city, event.addr_state)})
+              )}
+              <br />
+              {formatStartDate(event.start_at)} ({formatLocation(event.city, event.addr_state)})
             </li>
           ))
         )}

@@ -1,11 +1,14 @@
 import os
+import re
 import time
 from collections import deque
+from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
 
-load_dotenv()
+ENV_PATH = Path(__file__).resolve().parents[3] / ".env"
+load_dotenv(dotenv_path=str(ENV_PATH))
 
 STARTGG_API_URL = "https://api.start.gg/gql/alpha"
 API_KEY = os.getenv("STARTGG_API_KEY")
@@ -195,10 +198,6 @@ def get_player_recent_set_ids(
     per_page: int = 50,
     max_pages: int = 60,
 ) -> list[int]:
-    """
-    Return set ids for a player that are in the time window and Smash Ultimate events.
-    Uses paginated player sets and filters by tournament start time + event videogame id.
-    """
     query = """
     query PlayerSetsPage($playerId: ID!, $perPage: Int!, $page: Int!) {
       player(id: $playerId) {
@@ -280,9 +279,6 @@ def get_player_recent_set_ids(
 
 
 def get_set_selection_values_for_player(*, set_id: int, player_id: int) -> list[int]:
-    """
-    Return selectionValue entries from every game in a set for the specific player.
-    """
     query = """
     query SetWithSelections($setId: ID!) {
       set(id: $setId) {
@@ -331,10 +327,6 @@ def get_set_selection_values_for_player_batch(
     player_id: int,
     batch_size: int = 12,
 ) -> dict[int, list[int]]:
-    """
-    Fetch selection values for many sets in batched alias queries.
-    Returns {set_id: [selectionValue, ...]} for the provided player.
-    """
     out: dict[int, list[int]] = {int(sid): [] for sid in set_ids}
     if not set_ids:
         return out
@@ -397,5 +389,241 @@ def get_set_selection_values_for_player_batch(
                         continue
                     values.append(int(val))
             out[sid] = values
+
+    return out
+
+
+def _strip_tag_prefix(tag: str) -> str:
+    s = str(tag or "").strip()
+    if "|" in s:
+        s = s.rsplit("|", 1)[-1].strip()
+    return s
+
+
+def _parse_display_score(display_score: str) -> tuple[str, int, str, int] | None:
+    raw = str(display_score or "").strip()
+    if not raw:
+        return None
+
+    # Common non-numeric outcomes are ignored for upset scoring.
+    if any(token in raw.upper() for token in ("DQ", "LFF", "WFF")):
+        return None
+
+    parts = raw.split(" - ", 1)
+    if len(parts) != 2:
+        return None
+
+    left = _strip_tag_prefix(parts[0])
+    right = _strip_tag_prefix(parts[1])
+
+    left_match = re.match(r"^(?P<tag>.+?)\s+(?P<score>\d+)$", left)
+    right_match = re.match(r"^(?P<tag>.+?)\s+(?P<score>\d+)$", right)
+    if not left_match or not right_match:
+        return None
+
+    left_tag = left_match.group("tag").strip()
+    right_tag = right_match.group("tag").strip()
+    left_score = int(left_match.group("score"))
+    right_score = int(right_match.group("score"))
+
+    if not left_tag or not right_tag:
+        return None
+
+    return left_tag, left_score, right_tag, right_score
+
+
+def get_player_recent_sets_with_results(
+    *,
+    player_id: int,
+    limit: int = 100,
+) -> list[dict]:
+    # paginate to reach limit
+    per_page = max(1, min(int(limit), 50))
+    max_pages = max(1, int((int(limit) + per_page - 1) // per_page))
+    query = """
+    query PlayerSetsForUpsets($playerId: ID!, $perPage: Int!, $page: Int!) {
+      player(id: $playerId) {
+        sets(perPage: $perPage, page: $page) {
+          nodes {
+            id
+            displayScore
+            event {
+              videogame {
+                id
+              }
+            }
+          }
+        }
+      }
+    }
+    """
+    out: list[dict] = []
+    seen_set_ids: set[int] = set()
+
+    for page in range(1, max_pages + 1):
+        data = startgg_request(
+            query,
+            {
+                "playerId": int(player_id),
+                "perPage": per_page,
+                "page": page,
+            },
+        )
+
+        player = data.get("player") or {}
+        sets_obj = player.get("sets") or {}
+        nodes = sets_obj.get("nodes") or []
+        if not nodes:
+            break
+
+        for node in nodes:
+            event = node.get("event") or {}
+            videogame = event.get("videogame") or {}
+            if int(videogame.get("id") or 0) != STARTGG_SMASH_ULTIMATE_ID:
+                continue
+
+            parsed = _parse_display_score(str(node.get("displayScore") or ""))
+            if parsed is None:
+                continue
+            left_tag, left_score, right_tag, right_score = parsed
+
+            if left_score == right_score:
+                continue
+            winner_tag = left_tag if left_score > right_score else right_tag
+            loser_tag = right_tag if left_score > right_score else left_tag
+
+            sid = node.get("id")
+            sid_int = int(sid) if sid is not None else None
+            if sid_int is not None:
+                if sid_int in seen_set_ids:
+                    continue
+                seen_set_ids.add(sid_int)
+
+            out.append(
+                {
+                    "set_id": sid_int,
+                    "winner_tag": winner_tag,
+                    "loser_tag": loser_tag,
+                }
+            )
+
+            if len(out) >= int(limit):
+                return out[: int(limit)]
+
+    return out[: int(limit)]
+
+
+def get_players_recent_sets_with_results_batch(
+    *,
+    player_ids: list[int],
+    limit_per_player: int = 50,
+    page: int = 1,
+    batch_size: int = 12,
+) -> dict[int, list[dict]]:
+    """
+    Batch-fetch recent sets (with parsed winner/loser tags) for many players in one StartGG request
+    using GraphQL aliases.
+
+    Returns {player_id: [{set_id, winner_tag, loser_tag}, ...]}
+    """
+    # Keep this low to avoid StartGG GraphQL "query complexity" failures.
+    # We still reach `limit_per_player` via pagination across `page_num`.
+    per_page = max(1, min(int(limit_per_player), 25))
+    max_pages = max(1, int((int(limit_per_player) + per_page - 1) // per_page))
+
+    out: dict[int, list[dict]] = {int(pid): [] for pid in player_ids}
+    if not player_ids:
+        return out
+
+    query_tpl = """
+    query BatchedPlayerSetsForUpsets({vars}) {{
+    {aliases}
+    }}
+    """
+
+    for start in range(0, len(player_ids), int(batch_size)):
+        chunk = [int(pid) for pid in player_ids[start : start + int(batch_size)]]
+        seen_set_ids_by_pid: dict[int, set[int]] = {pid: set() for pid in chunk}
+
+        alias_blocks: list[str] = []
+        var_parts: list[str] = ["$perPage: Int!", "$page: Int!"]
+        variables_static: dict[str, int] = {"perPage": per_page, "page": int(page)}
+
+        for idx, pid in enumerate(chunk):
+            var_name = f"playerId{idx}"
+            alias = f"p{idx}"
+            variables_static[var_name] = int(pid)
+            var_parts.append(f"${var_name}: ID!")
+            alias_blocks.append(
+                f"""
+                {alias}: player(id: ${var_name}) {{
+                  sets(perPage: $perPage, page: $page) {{
+                    nodes {{
+                      id
+                      displayScore
+                      event {{
+                        videogame {{ id }}
+                      }}
+                    }}
+                  }}
+                }}
+                """
+            )
+
+        query = query_tpl.format(vars=", ".join(var_parts), aliases="\n".join(alias_blocks))
+
+        for page_num in range(int(page), int(page) + max_pages):
+            variables: dict[str, int] = dict(variables_static)
+            variables["page"] = int(page_num)
+
+            data = startgg_request(query, variables)
+
+            if all(len(out[int(pid)]) >= int(limit_per_player) for pid in chunk):
+                break
+
+            for idx, pid in enumerate(chunk):
+                if len(out[int(pid)]) >= int(limit_per_player):
+                    continue
+
+                player_obj = data.get(f"p{idx}") or {}
+                sets_obj = player_obj.get("sets") or {}
+                nodes = sets_obj.get("nodes") or []
+
+                for node in nodes:
+                    event = node.get("event") or {}
+                    videogame = event.get("videogame") or {}
+                    if int(videogame.get("id") or 0) != STARTGG_SMASH_ULTIMATE_ID:
+                        continue
+
+                    parsed = _parse_display_score(str(node.get("displayScore") or ""))
+                    if parsed is None:
+                        continue
+                    left_tag, left_score, right_tag, right_score = parsed
+                    if left_score == right_score:
+                        continue
+                    winner_tag = left_tag if left_score > right_score else right_tag
+                    loser_tag = right_tag if left_score > right_score else left_tag
+
+                    sid = node.get("id")
+                    sid_int = int(sid) if sid is not None else None
+                    if sid_int is not None:
+                        if sid_int in seen_set_ids_by_pid[int(pid)]:
+                            continue
+                        seen_set_ids_by_pid[int(pid)].add(sid_int)
+
+                    out[int(pid)].append(
+                        {
+                            "set_id": sid_int,
+                            "winner_tag": winner_tag,
+                            "loser_tag": loser_tag,
+                        }
+                    )
+
+                    if len(out[int(pid)]) >= int(limit_per_player):
+                        break
+
+    # Cap per player (safety).
+    for pid in out:
+        out[pid] = out[pid][: int(limit_per_player)]
 
     return out

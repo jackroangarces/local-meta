@@ -14,6 +14,13 @@ from scripts.import_character_data import get_character_decoder_template
 router = APIRouter(prefix="/regions", tags=["regions"])
 
 
+def _normalize_player_tag(tag: str) -> str:
+    s = str(tag or "").strip()
+    if "|" in s:
+        s = s.rsplit("|", 1)[-1].strip()
+    return re.sub(r"\s+", " ", s).casefold()
+
+
 @router.get("/names")
 def list_region_names(db: Session = Depends(get_db)):
     stmt = select(Region.name).order_by(Region.name)
@@ -41,11 +48,38 @@ def top_players_current_tags(
             ORDER BY {order_by}
             LIMIT 1
         )
-        SELECT re.rank, p.current_tag, p.supermajor_player_id
-        FROM ranking_entries re
-        JOIN latest_snapshot ls ON re.snapshot_id = ls.id
-        JOIN players p ON p.id = re.player_id
-        ORDER BY re.rank ASC
+        ,
+        ranked_players AS (
+            SELECT
+                re.rank,
+                re.player_id,
+                p.current_tag,
+                p.supermajor_player_id
+            FROM ranking_entries re
+            JOIN latest_snapshot ls ON re.snapshot_id = ls.id
+            JOIN players p ON p.id = re.player_id
+        ),
+        player_top_char AS (
+            SELECT
+                cu.player_id,
+                cu.character_name,
+                ROW_NUMBER() OVER (
+                    PARTITION BY cu.player_id
+                    ORDER BY cu.play_percent DESC, cu.character_id ASC
+                ) AS rn
+            FROM character_usage cu
+            JOIN latest_snapshot ls ON cu.snapshot_id = ls.id
+        )
+        SELECT
+            rp.rank,
+            rp.current_tag,
+            rp.supermajor_player_id,
+            ptc.character_name AS main_character_name
+        FROM ranked_players rp
+        LEFT JOIN player_top_char ptc
+            ON ptc.player_id = rp.player_id
+            AND ptc.rn = 1
+        ORDER BY rp.rank ASC
     """
 
     with engine.connect() as conn:
@@ -55,6 +89,7 @@ def top_players_current_tags(
         {
             "current_tag": str(r.current_tag),
             "supermajor_player_id": int(r.supermajor_player_id),
+            "main_character_name": str(r.main_character_name) if r.main_character_name is not None else None,
         }
         for r in rows
         if r.current_tag is not None and r.supermajor_player_id is not None
@@ -535,3 +570,100 @@ def unused_characters(
     unused.sort(key=lambda x: str(x["character_name"]))
 
     return {"unused_characters": unused}
+
+
+@router.get("/rising-stars")
+def rising_stars(
+    region_name: str = Query(..., description="Region `name` as shown in the regions dropdown"),
+    limit: int = Query(20, ge=1, le=100),
+):
+    """
+    Read cached upset results from the `upsets` table for the latest snapshot in the region.
+    """
+    order_by = "rs.ranking_date DESC, rs.id DESC"
+    sql = f"""
+        WITH target_region AS (
+            SELECT id
+            FROM regions
+            WHERE name = :region_name
+            ORDER BY id DESC
+            LIMIT 1
+        ),
+        latest_snapshot AS (
+            SELECT rs.id
+            FROM ranking_snapshots rs
+            JOIN target_region tr ON rs.region_id = tr.id
+            ORDER BY {order_by}
+            LIMIT 1
+        ),
+        winner_totals AS (
+            SELECT
+                u.winner_player_id,
+                u.winner_tag,
+                u.winner_rank,
+                SUM(u.upset_factor)::int AS upset_score,
+                COUNT(*)::int AS upset_wins
+            FROM upsets u
+            JOIN latest_snapshot ls ON u.snapshot_id = ls.id
+            GROUP BY u.winner_player_id, u.winner_tag, u.winner_rank
+        ),
+        defeated_totals AS (
+            SELECT
+                u.winner_player_id,
+                u.defeated_player_id,
+                u.defeated_tag,
+                u.defeated_rank,
+                SUM(u.upset_factor)::int AS upset_factor_sum,
+                COUNT(*)::int AS upset_sets_count
+            FROM upsets u
+            JOIN latest_snapshot ls ON u.snapshot_id = ls.id
+            GROUP BY u.winner_player_id, u.defeated_player_id, u.defeated_tag, u.defeated_rank
+        )
+        SELECT
+            wt.winner_player_id AS player_id,
+            wt.winner_tag AS current_tag,
+            wt.winner_rank AS rank,
+            wt.upset_score,
+            wt.upset_wins,
+            COALESCE(
+                jsonb_agg(
+                    jsonb_build_object(
+                        'defeated_player_id', dt.defeated_player_id,
+                        'defeated_tag', dt.defeated_tag,
+                        'defeated_rank', dt.defeated_rank,
+                        'upset_factor', dt.upset_factor_sum,
+                        'upset_sets', dt.upset_sets_count
+                    )
+                    ORDER BY dt.upset_factor_sum DESC, dt.defeated_tag ASC
+                ) FILTER (WHERE dt.defeated_player_id IS NOT NULL),
+                '[]'::jsonb
+            ) AS upsets
+        FROM winner_totals wt
+        LEFT JOIN defeated_totals dt ON dt.winner_player_id = wt.winner_player_id
+        GROUP BY wt.winner_player_id, wt.winner_tag, wt.winner_rank, wt.upset_score, wt.upset_wins
+        ORDER BY wt.upset_score DESC, wt.upset_wins DESC, wt.winner_rank ASC, wt.winner_tag ASC
+        LIMIT :limit;
+    """
+
+    with engine.connect() as conn:
+        rows = conn.execute(text(sql), {"region_name": region_name, "limit": int(limit)}).all()
+
+    return {
+        "rising_stars": [
+            {
+                "player_id": int(r.player_id),
+                "current_tag": str(r.current_tag),
+                "rank": int(r.rank),
+                "upset_score": int(r.upset_score),
+                "upset_wins": int(r.upset_wins),
+                "upsets": (
+                    r.upsets
+                    if isinstance(r.upsets, list)
+                    else json.loads(r.upsets)
+                    if isinstance(r.upsets, str) and r.upsets
+                    else []
+                ),
+            }
+            for r in rows
+        ]
+    }

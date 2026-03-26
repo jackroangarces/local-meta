@@ -17,7 +17,11 @@ export async function fetchRegionActivityCard(region: string): Promise<{ items: 
 export async function fetchRegionTopPlayersCurrentTagsCard(
   region: string,
 ): Promise<{
-  topPlayers: Array<{ current_tag: string; supermajor_player_id: number }>;
+  topPlayers: Array<{
+    current_tag: string;
+    supermajor_player_id: number;
+    main_character_name: string | null;
+  }>;
 }> {
   const API_BASE = "/api";
   const params = new URLSearchParams({ region_name: region });
@@ -25,7 +29,13 @@ export async function fetchRegionTopPlayersCurrentTagsCard(
   if (!res.ok) {
     throw new Error(`Request failed (${res.status})`);
   }
-  const data: { top_players: Array<{ current_tag: string; supermajor_player_id: number }> } = await res.json();
+  const data: {
+    top_players: Array<{
+      current_tag: string;
+      supermajor_player_id: number;
+      main_character_name: string | null;
+    }>;
+  } = await res.json();
   return { topPlayers: data.top_players ?? [] };
 }
 
@@ -172,4 +182,47 @@ export async function fetchRegionUpcomingEventsCard(
     }>;
   } = await res.json();
   return { tournaments: data.tournaments ?? [] };
+}
+
+export async function fetchRegionRisingStarsCard(
+  region: string,
+): Promise<{
+  risingStars: Array<{
+    player_id: number;
+    current_tag: string;
+    rank: number;
+    upset_score: number;
+    upset_wins: number;
+    upsets: Array<{
+      defeated_player_id: number;
+      defeated_tag: string;
+      defeated_rank: number;
+      upset_factor: number;
+      upset_sets: number;
+    }>;
+  }>;
+}> {
+  const API_BASE = "/api";
+  const params = new URLSearchParams({ region_name: region, limit: "20" });
+  const res = await fetch(`${API_BASE}/regions/rising-stars?${params.toString()}`);
+  if (!res.ok) {
+    throw new Error(`Request failed (${res.status})`);
+  }
+  const data: {
+    rising_stars: Array<{
+      player_id: number;
+      current_tag: string;
+      rank: number;
+      upset_score: number;
+      upset_wins: number;
+      upsets: Array<{
+        defeated_player_id: number;
+        defeated_tag: string;
+        defeated_rank: number;
+        upset_factor: number;
+        upset_sets: number;
+      }>;
+    }>;
+  } = await res.json();
+  return { risingStars: data.rising_stars ?? [] };
 }
