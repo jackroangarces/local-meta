@@ -1,4 +1,5 @@
 import csv
+import json
 import re
 from pathlib import Path
 
@@ -122,6 +123,7 @@ def _query_most_mained_characters(region_name: str, *, limit: int | None = 10) -
         ),
         player_top_characters AS (
             SELECT
+                cu.player_id,
                 cu.character_id,
                 cu.character_name
             FROM character_usage cu
@@ -129,15 +131,53 @@ def _query_most_mained_characters(region_name: str, *, limit: int | None = 10) -
             JOIN player_max pm
                 ON pm.player_id = cu.player_id
                 AND cu.play_percent = pm.max_play_percent
+        ),
+        player_ranks AS (
+            SELECT
+                re.player_id,
+                re.rank
+            FROM ranking_entries re
+            JOIN latest_snapshot ls ON re.snapshot_id = ls.id
+        )
+        ,
+        character_main_counts AS (
+            SELECT
+                ptc.character_id,
+                ptc.character_name,
+                COUNT(*)::int AS main_count
+            FROM player_top_characters ptc
+            GROUP BY ptc.character_id, ptc.character_name
+        ),
+        top_characters AS (
+            SELECT *
+            FROM character_main_counts
+            ORDER BY main_count DESC, character_name ASC
+            {limit_sql}
         )
         SELECT
-            ptc.character_id,
-            ptc.character_name,
-            COUNT(*)::int AS main_count
-        FROM player_top_characters ptc
-        GROUP BY ptc.character_id, ptc.character_name
-        ORDER BY main_count DESC, ptc.character_name ASC
-        {limit_sql};
+            tc.character_id,
+            tc.character_name,
+            tc.main_count,
+            COALESCE(
+                jsonb_agg(
+                    jsonb_build_object(
+                        'player_id', ptc.player_id,
+                        'current_tag', p.current_tag,
+                        'rank', pr.rank
+                    )
+                    ORDER BY pr.rank ASC, p.current_tag ASC
+                ),
+                '[]'::jsonb
+            ) AS mains_players
+        FROM top_characters tc
+        JOIN player_top_characters ptc
+            ON ptc.character_id = tc.character_id
+        JOIN players p
+            ON p.id = ptc.player_id
+        LEFT JOIN player_ranks pr
+            ON pr.player_id = ptc.player_id
+        GROUP BY tc.character_id, tc.character_name, tc.main_count
+        ORDER BY tc.main_count DESC, tc.character_name ASC;
     """
 
     with engine.connect() as conn:
@@ -148,6 +188,13 @@ def _query_most_mained_characters(region_name: str, *, limit: int | None = 10) -
             "character_id": float(r.character_id),
             "character_name": str(r.character_name),
             "main_count": int(r.main_count),
+            "mains_players": (
+                r.mains_players
+                if isinstance(r.mains_players, list)
+                else json.loads(r.mains_players)
+                if isinstance(r.mains_players, str) and r.mains_players
+                else []
+            ),
         }
         for r in rows
     ]
@@ -156,7 +203,7 @@ def _query_most_mained_characters(region_name: str, *, limit: int | None = 10) -
 @router.get("/most-mained-characters")
 def most_mained_characters(
     region_name: str = Query(..., description="Region `name` as shown in the regions dropdown"),
-    limit: int = Query(10, ge=1, le=200),
+    limit: int = Query(20, ge=1, le=200),
 ):
     return {"most_mained_characters": _query_most_mained_characters(region_name, limit=limit)}
 
@@ -240,6 +287,7 @@ def _load_winrate_matrix() -> tuple[list[str], dict[str, dict[str, float]]]:
 @router.get("/best-matchups")
 def best_matchups(
     region_name: str = Query(..., description="Region `name` as shown in the regions dropdown"),
+    limit: int = Query(20, ge=1, le=200),
 ):
     all_mains = _query_most_mained_characters(region_name, limit=None)
     if not all_mains:
@@ -299,12 +347,13 @@ def best_matchups(
         )
 
     scored.sort(key=lambda x: (-float(x["efficiency"]), str(x["character_name"])))
-    return {"best_matchups": scored[:10]}
+    return {"best_matchups": scored[:limit]}
 
 
 @router.get("/most-battled-characters")
 def most_battled_characters(
     region_name: str = Query(..., description="Region `name` as shown in the regions dropdown"),
+    limit: int = Query(20, ge=1, le=200),
 ):
     """
     For the latest ranking snapshot in the given region:
@@ -313,6 +362,7 @@ def most_battled_characters(
     """
     order_by = "rs.ranking_date DESC, rs.id DESC"
 
+    limit_sql = f"LIMIT {int(limit)}"
     sql = f"""
         WITH target_region AS (
             SELECT id
@@ -336,7 +386,7 @@ def most_battled_characters(
         JOIN latest_snapshot ls ON cu.snapshot_id = ls.id
         GROUP BY cu.character_id, cu.character_name
         ORDER BY games_played_sum DESC, cu.character_name ASC
-        LIMIT 10;
+        {limit_sql};
     """
 
     with engine.connect() as conn:
@@ -357,6 +407,7 @@ def most_battled_characters(
 @router.get("/least-appearances-characters")
 def least_appearances_characters(
     region_name: str = Query(..., description="Region `name` as shown in the regions dropdown"),
+    limit: int = Query(20, ge=1, le=200),
 ):
     """
     For the latest ranking snapshot in the given region:
@@ -365,6 +416,7 @@ def least_appearances_characters(
     """
     order_by = "rs.ranking_date DESC, rs.id DESC"
 
+    limit_sql = f"LIMIT {int(limit)}"
     sql = f"""
         WITH target_region AS (
             SELECT id
@@ -388,7 +440,7 @@ def least_appearances_characters(
         JOIN latest_snapshot ls ON cu.snapshot_id = ls.id
         GROUP BY cu.character_id, cu.character_name
         ORDER BY games_played_sum ASC, cu.character_name ASC
-        LIMIT 10;
+        {limit_sql};
     """
 
     with engine.connect() as conn:

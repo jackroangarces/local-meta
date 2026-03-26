@@ -36,17 +36,27 @@ export async function fetchRegionMostMainedCharactersCard(
     character_id: number;
     character_name: string;
     main_count: number;
+    mains_players: Array<{
+      player_id: number;
+      current_tag: string;
+      rank: number | null;
+    }>;
   }>;
 }> {
   const API_BASE = "/api";
-  const params = new URLSearchParams({ region_name: region, limit: "10" });
+  const params = new URLSearchParams({ region_name: region, limit: "20" });
   const res = await fetch(`${API_BASE}/regions/most-mained-characters?${params.toString()}`);
   if (!res.ok) {
     throw new Error(`Request failed (${res.status})`);
   }
 
   const data: {
-    most_mained_characters: Array<{ character_id: number; character_name: string; main_count: number }>;
+    most_mained_characters: Array<{
+      character_id: number;
+      character_name: string;
+      main_count: number;
+      mains_players: Array<{ player_id: number; current_tag: string; rank: number | null }>;
+    }>;
   } = await res.json();
 
   return { mostMainedCharacters: data.most_mained_characters ?? [] };
@@ -62,7 +72,7 @@ export async function fetchRegionBestMatchupsCard(
   }>;
 }> {
   const API_BASE = "/api";
-  const params = new URLSearchParams({ region_name: region });
+  const params = new URLSearchParams({ region_name: region, limit: "20" });
   const res = await fetch(`${API_BASE}/regions/best-matchups?${params.toString()}`);
   if (!res.ok) {
     throw new Error(`Request failed (${res.status})`);
@@ -85,7 +95,7 @@ export async function fetchRegionMostBattledCharactersCard(
   }>;
 }> {
   const API_BASE = "/api";
-  const params = new URLSearchParams({ region_name: region });
+  const params = new URLSearchParams({ region_name: region, limit: "20" });
   const res = await fetch(`${API_BASE}/regions/most-battled-characters?${params.toString()}`);
   if (!res.ok) {
     throw new Error(`Request failed (${res.status})`);
@@ -112,7 +122,7 @@ export async function fetchRegionLeastAppearancesCharactersCard(
   }>;
 }> {
   const API_BASE = "/api";
-  const params = new URLSearchParams({ region_name: region });
+  const params = new URLSearchParams({ region_name: region, limit: "20" });
   const res = await fetch(
     `${API_BASE}/regions/least-appearances-characters?${params.toString()}`,
   );

@@ -41,7 +41,7 @@ export function BestMatchupsCard({ region, data }: Props) {
       <h2 className="dashboard-card__title">Best Coverage</h2>
       <p className="dashboard-card__meta">Efficiency % weighted by mains distribution in {region}</p>
 
-      <ol className="dashboard-card__list">
+      <ol className="dashboard-card__list dashboard-card__list--scroll">
         {rows.length === 0 ? (
           <li>No data yet</li>
         ) : (

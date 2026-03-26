@@ -278,7 +278,7 @@ p {
 
 .dashboard-card__list {
   margin: 0.5rem 0 0;
-  padding-left: 2.25rem;
+  padding-left: 2.4rem;
   color: #ffffff;
 }
 
@@ -300,6 +300,63 @@ p {
 .dashboard-card__char-text {
   white-space: normal;
   flex: 1 1 auto;
+}
+
+.dashboard-card__char-hover-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  flex: 1 1 auto;
+}
+
+.dashboard-card__char-main-count {
+  white-space: nowrap;
+}
+
+.dashboard-card__hover-panel {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  z-index: 50;
+  min-width: 220px;
+  max-width: 320px;
+  max-height: 220px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.95);
+  border: 1px solid #595959;
+  border-radius: 10px;
+  padding: 0.6rem 0.75rem;
+  display: none;
+  color: #ffffff;
+  text-align: left;
+  pointer-events: none;
+}
+
+.dashboard-card__char-hover-wrap:hover .dashboard-card__hover-panel {
+  display: block;
+  pointer-events: auto;
+}
+
+.dashboard-card__hover-panel-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.dashboard-card__hover-panel-list {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.dashboard-card__hover-panel-list li {
+  margin: 0.25rem 0;
+  color: #ffffff;
+}
+
+.dashboard-card__hover-panel-empty {
+  color: #ffffff;
+  opacity: 0.8;
 }
 
 .dashboard-card__char-icon {
