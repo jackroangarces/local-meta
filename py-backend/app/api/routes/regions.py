@@ -409,53 +409,70 @@ def least_appearances_characters(
     region_name: str = Query(..., description="Region `name` as shown in the regions dropdown"),
     limit: int = Query(20, ge=1, le=200),
 ):
-    """
-    For the latest ranking snapshot in the given region:
-    - Aggregate `games_played` across all rows in `character_usage` for that snapshot
-    - Return the top 10 characters with the least total games_played.
-    """
+    
     order_by = "rs.ranking_date DESC, rs.id DESC"
-
-    limit_sql = f"LIMIT {int(limit)}"
-    sql = f"""
+    sql_snapshot_id = f"""
         WITH target_region AS (
             SELECT id
             FROM regions
             WHERE name = :region_name
             ORDER BY id DESC
             LIMIT 1
-        ),
-        latest_snapshot AS (
-            SELECT rs.id
-            FROM ranking_snapshots rs
-            JOIN target_region tr ON rs.region_id = tr.id
-            ORDER BY {order_by}
-            LIMIT 1
         )
+        SELECT rs.id
+        FROM ranking_snapshots rs
+        JOIN target_region tr ON rs.region_id = tr.id
+        ORDER BY {order_by}
+        LIMIT 1;
+    """
+    sql_usage = """
         SELECT
             cu.character_id,
             cu.character_name,
             SUM(cu.games_played)::int AS games_played_sum
         FROM character_usage cu
-        JOIN latest_snapshot ls ON cu.snapshot_id = ls.id
+        WHERE cu.snapshot_id = :snapshot_id
         GROUP BY cu.character_id, cu.character_name
-        ORDER BY games_played_sum ASC, cu.character_name ASC
-        {limit_sql};
     """
 
     with engine.connect() as conn:
-        rows = conn.execute(text(sql), {"region_name": region_name}).all()
+        snapshot_id = conn.execute(text(sql_snapshot_id), {"region_name": region_name}).scalar()
+        if snapshot_id is None:
+            return {"least_appearances_characters": []}
+        rows = conn.execute(text(sql_usage), {"snapshot_id": snapshot_id}).all()
 
-    return {
-        "least_appearances_characters": [
-            {
+    def norm_id(v: float) -> float:
+        return round(float(v), 1)
+
+    decoder = get_character_decoder_template()
+    by_id: dict[float, dict[str, object]] = {}
+    for char_id, char_name in decoder.values():
+        n = norm_id(char_id)
+        if n in by_id:
+            continue
+        by_id[n] = {
+            "character_id": float(char_id),
+            "character_name": str(char_name),
+            "games_played_sum": 0,
+        }
+
+    for r in rows:
+        n = norm_id(r.character_id)
+        existing = by_id.get(n)
+        if existing is None:
+            by_id[n] = {
                 "character_id": float(r.character_id),
                 "character_name": str(r.character_name),
                 "games_played_sum": int(r.games_played_sum),
             }
-            for r in rows
-        ]
-    }
+        else:
+            existing["games_played_sum"] = int(r.games_played_sum)
+            existing["character_name"] = str(r.character_name)
+
+    combined = list(by_id.values())
+    combined.sort(key=lambda x: (int(x["games_played_sum"]), str(x["character_name"])))
+
+    return {"least_appearances_characters": combined[: int(limit)]}
 
 
 @router.get("/unused-characters")

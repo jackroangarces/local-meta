@@ -141,28 +141,6 @@ export async function fetchRegionLeastAppearancesCharactersCard(
   return { leastAppearancesCharacters: data.least_appearances_characters ?? [] };
 }
 
-export async function fetchRegionUnusedCharactersCard(
-  region: string,
-): Promise<{
-  unusedCharacters: Array<{
-    character_id: number;
-    character_name: string;
-  }>;
-}> {
-  const API_BASE = "/api";
-  const params = new URLSearchParams({ region_name: region });
-  const res = await fetch(`${API_BASE}/regions/unused-characters?${params.toString()}`);
-  if (!res.ok) {
-    throw new Error(`Request failed (${res.status})`);
-  }
-
-  const data: {
-    unused_characters: Array<{ character_id: number; character_name: string }>;
-  } = await res.json();
-
-  return { unusedCharacters: data.unused_characters ?? [] };
-}
-
 export async function fetchRegionUpcomingEventsCard(
   region: string,
 ): Promise<{
