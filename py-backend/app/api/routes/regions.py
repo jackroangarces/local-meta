@@ -337,7 +337,7 @@ def best_matchups(
         if used_weight == 0:
             continue
 
-        efficiency = weighted_sum / used_weight
+        efficiency = (weighted_sum / used_weight - 0.5) * 100;
         scored.append(
             {
                 "character_id": float(char_id),

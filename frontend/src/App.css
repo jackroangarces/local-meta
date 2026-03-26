@@ -278,8 +278,12 @@ p {
 
 .dashboard-card__list {
   margin: 0.5rem 0 0;
-  padding-left: 2.4rem;
+  padding-left: 2rem;
   color: #ffffff;
+}
+
+.dashboard-card__list--wide-padding {
+  padding-left: 2.4rem;
 }
 
 .dashboard-card__list li {

@@ -30,7 +30,13 @@ function resolveCharacterIconSrc(characterName: string): string | undefined {
 }
 
 function formatEfficiency(value: number): string {
-  return `${(value * 100).toFixed(2)}%`;
+  if (value > 0) {
+    return `+${(value * 100).toFixed(2)}`;
+  } else if (value < 0) {
+    return `-${(value * 100).toFixed(2)}`;
+  } else {
+    return `0.00`;
+  }
 }
 
 export function BestMatchupsCard({ region, data }: Props) {
@@ -39,7 +45,7 @@ export function BestMatchupsCard({ region, data }: Props) {
   return (
     <article className="dashboard-card">
       <h2 className="dashboard-card__title">Best Coverage</h2>
-      <p className="dashboard-card__meta">Efficiency % weighted by mains distribution in {region}</p>
+      <p className="dashboard-card__meta">Efficiency score weighted by mains distribution in {region}</p>
 
       <ol className="dashboard-card__list dashboard-card__list--scroll">
         {rows.length === 0 ? (

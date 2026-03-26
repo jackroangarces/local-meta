@@ -29,6 +29,10 @@ function formatLocation(city: string | null, state: string | null): string {
   return "Location TBD";
 }
 
+function extraNewlineIfSingleLine(shouldAdd: boolean) {
+  return shouldAdd ? <br /> : null;
+}
+
 export function UpcomingEventsCard({ region, data }: Props) {
   const events = data.tournaments ?? [];
 

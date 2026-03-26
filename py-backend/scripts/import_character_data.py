@@ -41,7 +41,7 @@ def get_character_decoder_template() -> dict[str, tuple[float, str]]:
         "A1310": (24, "Mewtwo"),
         "A1326": (25, "Roy"),
         "A1409": (25.1, "Chrom"),
-        "A1405": (26, "Mr. Game and Watch"),
+        "A1405": (26, "Mr. Game & Watch"),
         "A1307": (27, "Meta Knight"),
         "A1320": (28, "Pit"),
         "A1278": (28.1, "Dark Pit"),
