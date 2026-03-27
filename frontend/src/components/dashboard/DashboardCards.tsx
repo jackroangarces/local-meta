@@ -92,7 +92,6 @@ export function DashboardCards({ region, onAllQueriesComplete }: DashboardCardsP
           });
         }
       } catch {
-        // Shouldn't happen because Promise.allSettled doesn't throw, but keep a safe fallback.
         if (!cancelled) {
           setData({
             topPlayers: { topPlayers: [] },

@@ -3,6 +3,8 @@
  * DashboardCards awaits Promise.all(...) so the UI stays in loading until every query settles.
  */
 
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || "/api";
+
 export async function fetchRegionOverviewCard(region: string): Promise<{ headline: string }> {
   await new Promise((r) => setTimeout(r, 400 + Math.random() * 200));
   return { headline: `Overview for ${region}` };
@@ -23,7 +25,6 @@ export async function fetchRegionTopPlayersCurrentTagsCard(
     main_character_name: string | null;
   }>;
 }> {
-  const API_BASE = "/api";
   const params = new URLSearchParams({ region_name: region });
   const res = await fetch(`${API_BASE}/regions/top-players/current-tags?${params.toString()}`);
   if (!res.ok) {
@@ -53,7 +54,6 @@ export async function fetchRegionMostMainedCharactersCard(
     }>;
   }>;
 }> {
-  const API_BASE = "/api";
   const params = new URLSearchParams({ region_name: region, limit: "20" });
   const res = await fetch(`${API_BASE}/regions/most-mained-characters?${params.toString()}`);
   if (!res.ok) {
@@ -81,7 +81,6 @@ export async function fetchRegionBestMatchupsCard(
     efficiency: number;
   }>;
 }> {
-  const API_BASE = "/api";
   const params = new URLSearchParams({ region_name: region, limit: "20" });
   const res = await fetch(`${API_BASE}/regions/best-matchups?${params.toString()}`);
   if (!res.ok) {
@@ -104,7 +103,6 @@ export async function fetchRegionMostBattledCharactersCard(
     games_played_sum: number;
   }>;
 }> {
-  const API_BASE = "/api";
   const params = new URLSearchParams({ region_name: region, limit: "20" });
   const res = await fetch(`${API_BASE}/regions/most-battled-characters?${params.toString()}`);
   if (!res.ok) {
@@ -131,7 +129,6 @@ export async function fetchRegionLeastAppearancesCharactersCard(
     games_played_sum: number;
   }>;
 }> {
-  const API_BASE = "/api";
   const params = new URLSearchParams({ region_name: region, limit: "20" });
   const res = await fetch(
     `${API_BASE}/regions/least-appearances-characters?${params.toString()}`,
@@ -164,7 +161,6 @@ export async function fetchRegionUpcomingEventsCard(
     url: string | null;
   }>;
 }> {
-  const API_BASE = "/api";
   const params = new URLSearchParams({ region_name: region });
   const res = await fetch(`${API_BASE}/tournaments/upcoming-events?${params.toString()}`);
   if (!res.ok) {
@@ -202,7 +198,6 @@ export async function fetchRegionRisingStarsCard(
     }>;
   }>;
 }> {
-  const API_BASE = "/api";
   const params = new URLSearchParams({ region_name: region, limit: "20" });
   const res = await fetch(`${API_BASE}/regions/rising-stars?${params.toString()}`);
   if (!res.ok) {
@@ -243,7 +238,6 @@ export async function fetchRegionHeatedRivalriesCard(
     heated_score: number;
   }>;
 }> {
-  const API_BASE = "/api";
   const params = new URLSearchParams({ region_name: region, limit: "20" });
   const res = await fetch(`${API_BASE}/regions/heated-rivalries?${params.toString()}`);
   if (!res.ok) {

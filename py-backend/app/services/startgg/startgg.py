@@ -520,14 +520,6 @@ def get_players_recent_sets_with_results_batch(
     page: int = 1,
     batch_size: int = 12,
 ) -> dict[int, list[dict]]:
-    """
-    Batch-fetch recent sets (with parsed winner/loser tags) for many players in one StartGG request
-    using GraphQL aliases.
-
-    Returns {player_id: [{set_id, winner_tag, loser_tag}, ...]}
-    """
-    # Keep this low to avoid StartGG GraphQL "query complexity" failures.
-    # We still reach `limit_per_player` via pagination across `page_num`.
     per_page = max(1, min(int(limit_per_player), 25))
     max_pages = max(1, int((int(limit_per_player) + per_page - 1) // per_page))
 

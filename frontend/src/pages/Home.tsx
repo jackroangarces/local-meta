@@ -5,7 +5,7 @@ import LoadingSpinner from "../components/LoadingSpinner";
 type RegionsNamesResponse = { names: string[] };
 type LatestSnapshotResponse = { snapshot_id: number | null; ranking_date: string | null };
 
-const API_BASE = "/api";
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || "/api";
 
 export default function Home() {
   const [names, setNames] = useState<string[]>([]);

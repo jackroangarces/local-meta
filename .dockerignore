@@ -1,0 +1,12 @@
+.git
+.gitignore
+**/__pycache__/
+**/*.pyc
+frontend/node_modules
+frontend/dist
+py-backend/.env
+
+# Keep sensitive data out of image
+py-backend/data/reviewed/rankings
+py-backend/data/raw
+py-backend/data/parsed

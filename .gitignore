@@ -10,3 +10,8 @@ __pycache__/
 node_modules/
 dist/
 build/
+
+# Sensitive ranking CSVs
+py-backend/data/reviewed/rankings/
+py-backend/data/raw/
+py-backend/data/parsed/
