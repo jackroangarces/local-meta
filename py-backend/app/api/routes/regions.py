@@ -69,16 +69,30 @@ def top_players_current_tags(
                 ) AS rn
             FROM character_usage cu
             JOIN latest_snapshot ls ON cu.snapshot_id = ls.id
+        ),
+        player_top_char_fallback AS (
+            SELECT
+                cu.player_id,
+                cu.character_name,
+                ROW_NUMBER() OVER (
+                    PARTITION BY cu.player_id
+                    ORDER BY rs.ranking_date DESC, rs.id DESC, cu.play_percent DESC, cu.character_id ASC
+                ) AS rn
+            FROM character_usage cu
+            JOIN ranking_snapshots rs ON rs.id = cu.snapshot_id
         )
         SELECT
             rp.rank,
             rp.current_tag,
             rp.supermajor_player_id,
-            ptc.character_name AS main_character_name
+            COALESCE(ptc.character_name, ptcf.character_name) AS main_character_name
         FROM ranked_players rp
         LEFT JOIN player_top_char ptc
             ON ptc.player_id = rp.player_id
             AND ptc.rn = 1
+        LEFT JOIN player_top_char_fallback ptcf
+            ON ptcf.player_id = rp.player_id
+            AND ptcf.rn = 1
         ORDER BY rp.rank ASC
     """
 
@@ -663,6 +677,77 @@ def rising_stars(
                     if isinstance(r.upsets, str) and r.upsets
                     else []
                 ),
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.get("/heated-rivalries")
+def heated_rivalries(
+    region_name: str = Query(..., description="Region `name` as shown in the regions dropdown"),
+    limit: int = Query(20, ge=1, le=100),
+):
+    """
+    Return the most "heated" rivalries from cached head_to_heads for latest snapshot.
+    Heated score favors both high total_sets and close records.
+      heated_score = total_sets - abs(player1_wins - player2_wins)
+    """
+    order_by = "rs.ranking_date DESC, rs.id DESC"
+    sql = f"""
+        WITH target_region AS (
+            SELECT id
+            FROM regions
+            WHERE name = :region_name
+            ORDER BY id DESC
+            LIMIT 1
+        ),
+        latest_snapshot AS (
+            SELECT rs.id
+            FROM ranking_snapshots rs
+            JOIN target_region tr ON rs.region_id = tr.id
+            ORDER BY {order_by}
+            LIMIT 1
+        )
+        SELECT
+            h.player1_id,
+            h.player1_tag,
+            h.player1_rank,
+            h.player1_wins,
+            h.player2_id,
+            h.player2_tag,
+            h.player2_rank,
+            h.player2_wins,
+            h.total_sets,
+            (h.total_sets - ABS(h.player1_wins - h.player2_wins))::int AS heated_score
+        FROM head_to_heads h
+        JOIN latest_snapshot ls ON h.snapshot_id = ls.id
+        WHERE h.total_sets > 0
+        ORDER BY
+            heated_score DESC,
+            h.total_sets DESC,
+            ABS(h.player1_wins - h.player2_wins) ASC,
+            h.player1_rank ASC,
+            h.player2_rank ASC
+        LIMIT :limit;
+    """
+
+    with engine.connect() as conn:
+        rows = conn.execute(text(sql), {"region_name": region_name, "limit": int(limit)}).all()
+
+    return {
+        "heated_rivalries": [
+            {
+                "player1_id": int(r.player1_id),
+                "player1_tag": str(r.player1_tag),
+                "player1_rank": int(r.player1_rank),
+                "player1_wins": int(r.player1_wins),
+                "player2_id": int(r.player2_id),
+                "player2_tag": str(r.player2_tag),
+                "player2_rank": int(r.player2_rank),
+                "player2_wins": int(r.player2_wins),
+                "total_sets": int(r.total_sets),
+                "heated_score": int(r.heated_score),
             }
             for r in rows
         ]

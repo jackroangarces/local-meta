@@ -55,6 +55,10 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    print(
+        "[note] this pipeline expects `upsets` and `head_to_heads` tables to exist in the database."
+    )
+
     rankings_root = Path(args.rankings_root)
     if not rankings_root.exists():
         raise SystemExit(f"rankings_root does not exist: {rankings_root}")

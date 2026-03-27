@@ -25,7 +25,7 @@ export function RisingStarsCard({ region, data }: Props) {
     <article className="dashboard-card">
       <h2 className="dashboard-card__title">Rising Stars</h2>
       <p className="dashboard-card__meta">
-        Upset score determinedfrom last 100 sets vs top 100 players in {region}
+        Upset score determined from last 100 sets vs top 100 players in {region}
       </p>
 
       <ol className="dashboard-card__list dashboard-card__list--scroll">

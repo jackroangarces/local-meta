@@ -6,12 +6,14 @@ import { LeastAppearancesCharactersCard } from "./LeastAppearancesCharactersCard
 import { UpcomingEventsCard } from "./UpcomingEventsCard";
 import { BestMatchupsCard } from "./BestMatchupsCard";
 import { RisingStarsCard } from "./RisingStarsCard";
+import { HeatedRivalriesCard } from "./HeatedRivalriesCard";
 import { fetchRegionMostMainedCharactersCard, fetchRegionTopPlayersCurrentTagsCard } from "./cardQueries";
 import { fetchRegionMostBattledCharactersCard } from "./cardQueries";
 import { fetchRegionLeastAppearancesCharactersCard } from "./cardQueries";
 import { fetchRegionUpcomingEventsCard } from "./cardQueries";
 import { fetchRegionBestMatchupsCard } from "./cardQueries";
 import { fetchRegionRisingStarsCard } from "./cardQueries";
+import { fetchRegionHeatedRivalriesCard } from "./cardQueries";
 
 export type DashboardCardsProps = {
   region: string;
@@ -26,6 +28,7 @@ type DashboardData = {
   upcomingEvents: Awaited<ReturnType<typeof fetchRegionUpcomingEventsCard>>;
   bestMatchups: Awaited<ReturnType<typeof fetchRegionBestMatchupsCard>>;
   risingStars: Awaited<ReturnType<typeof fetchRegionRisingStarsCard>>;
+  heatedRivalries: Awaited<ReturnType<typeof fetchRegionHeatedRivalriesCard>>;
 };
 
 export function DashboardCards({ region, onAllQueriesComplete }: DashboardCardsProps) {
@@ -37,7 +40,7 @@ export function DashboardCards({ region, onAllQueriesComplete }: DashboardCardsP
     async function load() {
       setData(null);
       try {
-        const [topPlayersResult, mostMainedResult, mostBattledResult, leastAppearancesResult, upcomingEventsResult, bestMatchupsResult, risingStarsResult] =
+        const [topPlayersResult, mostMainedResult, mostBattledResult, leastAppearancesResult, upcomingEventsResult, bestMatchupsResult, risingStarsResult, heatedRivalriesResult] =
           await Promise.allSettled([
             fetchRegionTopPlayersCurrentTagsCard(region),
             fetchRegionMostMainedCharactersCard(region),
@@ -46,6 +49,7 @@ export function DashboardCards({ region, onAllQueriesComplete }: DashboardCardsP
             fetchRegionUpcomingEventsCard(region),
             fetchRegionBestMatchupsCard(region),
             fetchRegionRisingStarsCard(region),
+            fetchRegionHeatedRivalriesCard(region),
           ]);
 
         const topPlayers =
@@ -70,6 +74,10 @@ export function DashboardCards({ region, onAllQueriesComplete }: DashboardCardsP
           bestMatchupsResult.status === "fulfilled" ? bestMatchupsResult.value : { bestMatchups: [] };
         const risingStars =
           risingStarsResult.status === "fulfilled" ? risingStarsResult.value : { risingStars: [] };
+        const heatedRivalries =
+          heatedRivalriesResult.status === "fulfilled"
+            ? heatedRivalriesResult.value
+            : { heatedRivalries: [] };
 
         if (!cancelled) {
           setData({
@@ -80,6 +88,7 @@ export function DashboardCards({ region, onAllQueriesComplete }: DashboardCardsP
             upcomingEvents,
             bestMatchups,
             risingStars,
+            heatedRivalries,
           });
         }
       } catch {
@@ -93,6 +102,7 @@ export function DashboardCards({ region, onAllQueriesComplete }: DashboardCardsP
             upcomingEvents: { tournaments: [] },
             bestMatchups: { bestMatchups: [] },
             risingStars: { risingStars: [] },
+            heatedRivalries: { heatedRivalries: [] },
           });
         }
       } finally {
@@ -117,6 +127,7 @@ export function DashboardCards({ region, onAllQueriesComplete }: DashboardCardsP
       <UpcomingEventsCard region={region} data={data.upcomingEvents} />
       <TopPlayersCurrentTagsCard region={region} data={data.topPlayers} />
       <RisingStarsCard region={region} data={data.risingStars} />
+      <HeatedRivalriesCard region={region} data={data.heatedRivalries} />
       <MostMainedCharactersCard region={region} data={data.mostMainedCharacters} />
       <BestMatchupsCard region={region} data={data.bestMatchups} />
       <MostBattledCharactersCard region={region} data={data.mostBattledCharacters} />

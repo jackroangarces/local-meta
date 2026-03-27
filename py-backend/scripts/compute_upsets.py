@@ -57,21 +57,38 @@ def compute_and_fill_upsets(
     insert_batch_size: int = 250,
 ) -> dict[str, Any]:
     with engine.begin() as conn:
-        existing_count = conn.execute(
-            text(
-                "SELECT count(*) FROM upsets WHERE snapshot_id = :snapshot_id"
-            ),
+        existing_upsets_count = conn.execute(
+            text("SELECT count(*) FROM upsets WHERE snapshot_id = :snapshot_id"),
+            {"snapshot_id": int(snapshot_id)},
+        ).scalar()
+        existing_h2h_count = conn.execute(
+            text("SELECT count(*) FROM head_to_heads WHERE snapshot_id = :snapshot_id"),
             {"snapshot_id": int(snapshot_id)},
         ).scalar()
 
-        if existing_count and int(existing_count) > 0 and not bool(force):
+        if (
+            not bool(force)
+            and int(existing_upsets_count or 0) > 0
+            and int(existing_h2h_count or 0) > 0
+        ):
             return {
                 "snapshot_id": int(snapshot_id),
                 "set_limit": int(set_limit),
                 "batch_size": int(batch_size),
                 "skipped": True,
-                "existing_upsets_count": int(existing_count),
+                "existing_upsets_count": int(existing_upsets_count or 0),
+                "existing_head_to_heads_count": int(existing_h2h_count or 0),
             }
+
+        if bool(force):
+            conn.execute(
+                text("DELETE FROM upsets WHERE snapshot_id = :snapshot_id"),
+                {"snapshot_id": int(snapshot_id)},
+            )
+            conn.execute(
+                text("DELETE FROM head_to_heads WHERE snapshot_id = :snapshot_id"),
+                {"snapshot_id": int(snapshot_id)},
+            )
 
         ranked_rows = conn.execute(
             text(
@@ -90,6 +107,7 @@ def compute_and_fill_upsets(
         ).all()
 
         top100_by_tag_norm: dict[str, dict[str, Any]] = {}
+        ranked_by_tag_norm: dict[str, dict[str, Any]] = {}
         evaluated: list[dict[str, Any]] = []
 
         for r in ranked_rows:
@@ -97,6 +115,11 @@ def compute_and_fill_upsets(
                 continue
 
             tag_norm = _normalize_player_tag(str(r.current_tag))
+            ranked_by_tag_norm[tag_norm] = {
+                "player_id": int(r.player_id),
+                "rank": int(r.rank),
+                "current_tag": str(r.current_tag),
+            }
 
             if int(r.rank) <= 100:
                 top100_by_tag_norm[tag_norm] = {
@@ -126,6 +149,8 @@ def compute_and_fill_upsets(
         )
 
         insert_rows: list[dict[str, Any]] = []
+        h2h_by_pair: dict[tuple[int, int], dict[str, Any]] = {}
+        seen_ranked_set_ids: set[int] = set()
         upsets_inserted = 0
         upsets_considered = 0
 
@@ -137,6 +162,48 @@ def compute_and_fill_upsets(
             for s in sets_by_startgg_id.get(int(startgg_id), []):
                 winner_tag_norm = _normalize_player_tag(str(s.get("winner_tag") or ""))
                 loser_tag_norm = _normalize_player_tag(str(s.get("loser_tag") or ""))
+                set_id = s.get("set_id")
+                if set_id is not None:
+                    set_id = int(set_id)
+
+                # Head-to-head cache: any ranked-vs-ranked set counts (not only upsets).
+                winner_ranked = ranked_by_tag_norm.get(winner_tag_norm)
+                loser_ranked = ranked_by_tag_norm.get(loser_tag_norm)
+                if (
+                    set_id is not None
+                    and winner_ranked is not None
+                    and loser_ranked is not None
+                    and int(winner_ranked["player_id"]) != int(loser_ranked["player_id"])
+                    and set_id not in seen_ranked_set_ids
+                ):
+                    seen_ranked_set_ids.add(set_id)
+                    winner_id = int(winner_ranked["player_id"])
+                    loser_id = int(loser_ranked["player_id"])
+                    p1_id, p2_id = (winner_id, loser_id) if winner_id < loser_id else (loser_id, winner_id)
+                    pair_key = (p1_id, p2_id)
+                    pair_row = h2h_by_pair.get(pair_key)
+                    if pair_row is None:
+                        p1_meta = winner_ranked if int(winner_ranked["player_id"]) == p1_id else loser_ranked
+                        p2_meta = loser_ranked if int(loser_ranked["player_id"]) == p2_id else winner_ranked
+                        pair_row = {
+                            "snapshot_id": int(snapshot_id),
+                            "player1_id": int(p1_id),
+                            "player2_id": int(p2_id),
+                            "player1_tag": str(p1_meta["current_tag"]),
+                            "player2_tag": str(p2_meta["current_tag"]),
+                            "player1_rank": int(p1_meta["rank"]),
+                            "player2_rank": int(p2_meta["rank"]),
+                            "player1_wins": 0,
+                            "player2_wins": 0,
+                            "total_sets": 0,
+                        }
+                        h2h_by_pair[pair_key] = pair_row
+
+                    pair_row["total_sets"] = int(pair_row["total_sets"]) + 1
+                    if winner_id == p1_id:
+                        pair_row["player1_wins"] = int(pair_row["player1_wins"]) + 1
+                    else:
+                        pair_row["player2_wins"] = int(pair_row["player2_wins"]) + 1
 
                 if winner_tag_norm != self_tag_norm:
                     continue
@@ -149,7 +216,6 @@ def compute_and_fill_upsets(
                 if loser_rank >= self_rank:
                     continue
 
-                set_id = s.get("set_id")
                 if set_id is None:
                     continue
 
@@ -178,6 +244,9 @@ def compute_and_fill_upsets(
             _do_upsert(conn, insert_rows)
             upsets_inserted += len(insert_rows)
 
+        h2h_rows = list(h2h_by_pair.values())
+        _do_upsert_head_to_heads(conn, h2h_rows)
+
         return {
             "snapshot_id": int(snapshot_id),
             "set_limit": int(set_limit),
@@ -185,6 +254,7 @@ def compute_and_fill_upsets(
             "players_evaluated": int(len(evaluated)),
             "upsets_considered": int(upsets_considered),
             "upsets_rows_attempted_insert": int(upsets_inserted),
+            "head_to_heads_rows_upserted": int(len(h2h_rows)),
         }
 
 
@@ -221,6 +291,51 @@ def _do_upsert(conn, rows: list[dict[str, Any]]) -> None:
     conn.execute(sql, rows)
 
 
+def _do_upsert_head_to_heads(conn, rows: list[dict[str, Any]]) -> None:
+    sql = text(
+        """
+        INSERT INTO head_to_heads (
+            snapshot_id,
+            player1_id,
+            player2_id,
+            player1_tag,
+            player2_tag,
+            player1_rank,
+            player2_rank,
+            player1_wins,
+            player2_wins,
+            total_sets
+        )
+        VALUES (
+            :snapshot_id,
+            :player1_id,
+            :player2_id,
+            :player1_tag,
+            :player2_tag,
+            :player1_rank,
+            :player2_rank,
+            :player1_wins,
+            :player2_wins,
+            :total_sets
+        )
+        ON CONFLICT (snapshot_id, player1_id, player2_id)
+        DO UPDATE SET
+            player1_tag = EXCLUDED.player1_tag,
+            player2_tag = EXCLUDED.player2_tag,
+            player1_rank = EXCLUDED.player1_rank,
+            player2_rank = EXCLUDED.player2_rank,
+            player1_wins = EXCLUDED.player1_wins,
+            player2_wins = EXCLUDED.player2_wins,
+            total_sets = EXCLUDED.total_sets,
+            updated_at = NOW();
+        """
+    )
+    if not rows:
+        return
+    conn.execute(sql, rows)
+
+
+# poetry run python scripts/compute_upsets.py --region-name "Western Washington"
 def main() -> None:
     parser = argparse.ArgumentParser(description="Populate the `upsets` cache table for a ranking snapshot.")
     parser.add_argument("--region-name", dest="region_name", help="Region name (from UI dropdown).")

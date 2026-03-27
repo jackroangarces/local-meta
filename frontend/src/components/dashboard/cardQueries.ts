@@ -226,3 +226,42 @@ export async function fetchRegionRisingStarsCard(
   } = await res.json();
   return { risingStars: data.rising_stars ?? [] };
 }
+
+export async function fetchRegionHeatedRivalriesCard(
+  region: string,
+): Promise<{
+  heatedRivalries: Array<{
+    player1_id: number;
+    player1_tag: string;
+    player1_rank: number;
+    player1_wins: number;
+    player2_id: number;
+    player2_tag: string;
+    player2_rank: number;
+    player2_wins: number;
+    total_sets: number;
+    heated_score: number;
+  }>;
+}> {
+  const API_BASE = "/api";
+  const params = new URLSearchParams({ region_name: region, limit: "20" });
+  const res = await fetch(`${API_BASE}/regions/heated-rivalries?${params.toString()}`);
+  if (!res.ok) {
+    throw new Error(`Request failed (${res.status})`);
+  }
+  const data: {
+    heated_rivalries: Array<{
+      player1_id: number;
+      player1_tag: string;
+      player1_rank: number;
+      player1_wins: number;
+      player2_id: number;
+      player2_tag: string;
+      player2_rank: number;
+      player2_wins: number;
+      total_sets: number;
+      heated_score: number;
+    }>;
+  } = await res.json();
+  return { heatedRivalries: data.heated_rivalries ?? [] };
+}

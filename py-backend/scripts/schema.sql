@@ -91,3 +91,35 @@ CREATE INDEX IF NOT EXISTS ix_upsets_snapshot_defeated
 CREATE INDEX IF NOT EXISTS ix_upsets_snapshot_upset_factor
     ON upsets (snapshot_id, upset_factor);
 
+CREATE TABLE IF NOT EXISTS head_to_heads (
+    id BIGSERIAL PRIMARY KEY,
+    snapshot_id BIGINT NOT NULL REFERENCES ranking_snapshots(id) ON DELETE CASCADE,
+
+    player1_id BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    player2_id BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    CHECK (player1_id < player2_id),
+
+    player1_tag VARCHAR(255) NOT NULL,
+    player2_tag VARCHAR(255) NOT NULL,
+    player1_rank INTEGER NOT NULL,
+    player2_rank INTEGER NOT NULL,
+
+    player1_wins INTEGER NOT NULL DEFAULT 0 CHECK (player1_wins >= 0),
+    player2_wins INTEGER NOT NULL DEFAULT 0 CHECK (player2_wins >= 0),
+    total_sets INTEGER NOT NULL DEFAULT 0 CHECK (total_sets >= 0),
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT head_to_heads_unique_pair UNIQUE (snapshot_id, player1_id, player2_id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_head_to_heads_snapshot_total_sets
+    ON head_to_heads (snapshot_id, total_sets);
+
+CREATE INDEX IF NOT EXISTS ix_head_to_heads_snapshot_player1
+    ON head_to_heads (snapshot_id, player1_id);
+
+CREATE INDEX IF NOT EXISTS ix_head_to_heads_snapshot_player2
+    ON head_to_heads (snapshot_id, player2_id);
+
