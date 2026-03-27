@@ -1,16 +1,16 @@
 # Local Meta
 
-**Local Meta** is a full-stack web application that analyzes regional competitive *Super Smash Bros.* metagames using real player data. It aggregates tournament data, player rankings, and matchup statistics to surface insights about character viability and regional trends.
+**Local Meta** is a full-stack web application that analyzes regional competitive *Super Smash Bros. Ultimate* metagames using real player data. It aggregates tournament data, player rankings, and matchup statistics to provide information about character viability and regional trends.
 
 ---
 
 ## Overview
 
-Local Meta answers a simple but powerful question:
+Local Meta answers a relevant question for competetive smashers:
 
-> *What does the competitive meta actually look like in a specific region—and how can players adapt to it?*
+> *What does the competitive meta actually look like in a specific region, and how can players adapt to it?*
 
-By combining live tournament data, scraped ranking information, and matchup datasets, the app provides actionable insights into player behavior and character performance across different regions.
+By combining live tournament data, ranking information, and matchup datasets, the app provides insights into player skill and character performance across different regions.
 
 ---
 
@@ -30,6 +30,7 @@ By combining live tournament data, scraped ranking information, and matchup data
 - Uses the **start.gg API** to:
   - Fetch **upcoming tournaments**
   - Support location-based event discovery
+  - Retrieve event-specific or player-specific data
 
 ### Character Insights
 
@@ -43,7 +44,7 @@ By combining live tournament data, scraped ranking information, and matchup data
   Highlight underrepresented or niche picks
 
 - **Best Coverage Characters**  
-  Uses weighted matchup data to determine which characters perform best against the **actual regional meta**, not just theoretical tier lists
+  Uses weighted matchup data to determine which characters perform best against the **actual regional meta**, not just universal tier lists
 
 ---
 
