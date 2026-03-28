@@ -1,0 +1,114 @@
+name: Monthly data import
+
+on:
+  schedule:
+    # 1st of each month 08:15 UTC (adjust as needed)
+    - cron: "15 8 1 * *"
+  workflow_dispatch:
+    inputs:
+      force_upsets:
+        description: "Pass --force to upsets recompute"
+        type: boolean
+        default: true
+
+concurrency:
+  group: monthly-data-import-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  region-group:
+    name: Group ${{ matrix.group }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # StartGG rate limits: keep parallelism low; raise only if stable.
+      max-parallel: 2
+      matrix:
+        group: [1, 2, 3, 4]
+
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      STARTGG_API_KEY: ${{ secrets.STARTGG_API_KEY }}
+
+    steps:
+      - name: Checkout app
+        uses: actions/checkout@v4
+
+      - name: Checkout private rankings data
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.DATA_REPO }}
+          token: ${{ secrets.DATA_REPO_TOKEN }}
+          path: local-meta-data
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        run: pip install "poetry>=2.0.0"
+
+      - name: Install dependencies
+        working-directory: py-backend
+        run: poetry install --only main --no-root
+
+      - name: Build rankings root for this group
+        run: |
+          set -euo pipefail
+          GROUP_FILE="${GITHUB_WORKSPACE}/scripts/ci/region-groups/group-${{ matrix.group }}.txt"
+          OUT="/tmp/rankings-group-${{ matrix.group }}"
+          rm -rf "$OUT"
+          mkdir -p "$OUT"
+          count=0
+          while IFS= read -r line || [ -n "${line:-}" ]; do
+            line="${line//$'\r'/}"
+            [[ "$line" =~ ^[[:space:]]*# ]] && continue
+            slug="$(echo "$line" | xargs)"
+            [ -z "$slug" ] && continue
+            src="${GITHUB_WORKSPACE}/local-meta-data/reviewed/rankings/${slug}"
+            if [ ! -d "$src" ]; then
+              echo "Missing folder for slug: $slug ($src)" >&2
+              exit 1
+            fi
+            cp -r "$src" "$OUT/"
+            count=$((count + 1))
+          done < "$GROUP_FILE"
+          if [ "$count" -eq 0 ]; then
+            echo "No slugs in $GROUP_FILE — add one region slug per line." >&2
+            exit 1
+          fi
+          echo "Copied $count region folders into $OUT"
+
+      - name: Import rankings and compute upsets
+        working-directory: py-backend
+        run: |
+          set -euo pipefail
+          FORCE_FLAG=""
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ inputs.force_upsets }}" = "true" ]; then
+              FORCE_FLAG="--force"
+            fi
+          else
+            FORCE_FLAG="--force"
+          fi
+          poetry run python scripts/import_latest_rankings_and_upsets.py \
+            --rankings-root "/tmp/rankings-group-${{ matrix.group }}" \
+            --set-limit 100 \
+            --batch-size 6 \
+            $FORCE_FLAG
+
+      - name: Import character usage (regions in this group)
+        working-directory: py-backend
+        run: |
+          set -euo pipefail
+          GROUP_FILE="${GITHUB_WORKSPACE}/scripts/ci/region-groups/group-${{ matrix.group }}.txt"
+          while IFS= read -r line || [ -n "${line:-}" ]; do
+            line="${line//$'\r'/}"
+            [[ "$line" =~ ^[[:space:]]*# ]] && continue
+            slug="$(echo "$line" | xargs)"
+            [ -z "$slug" ] && continue
+            name="$(python -c "import sys; print(' '.join(w.capitalize() for w in sys.argv[1].split('-')))" "$slug")"
+            echo "Character import: $name"
+            poetry run python scripts/import_latest_character_data.py --region-name "$name"
+          done < "$GROUP_FILE"

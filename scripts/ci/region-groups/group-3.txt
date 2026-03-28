@@ -1,0 +1,16 @@
+# Group 3 of 4 — 15 regions
+midwest
+minnesota
+mississippi
+missouri
+nebraska
+norcal
+nordics
+north-carolina
+ohio
+oregon
+pacific-northwest
+philadelphia
+quebec
+reno
+san-diego

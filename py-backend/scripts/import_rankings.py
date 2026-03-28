@@ -194,8 +194,10 @@ def import_csv(csv_path: Path, region_slug: str, region_name: str, ranking_date:
     print(f"Imported {csv_path} for {region_slug} on {ranking_date}")
 
 def parse_date_from_filename(filename: str):
-    # remove .csv
-    name = filename.replace(".csv", "")
+    name = filename.replace(".csv", "").strip()
+    m = re.match(r"^(.+,\s*\d{4})", name)
+    if m:
+        name = m.group(1).strip()
     return datetime.strptime(name, "%B %d, %Y").date()
 
 if __name__ == "__main__":
