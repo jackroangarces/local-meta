@@ -21,8 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      # StartGG rate limits: keep parallelism low; raise only if stable.
-      max-parallel: 2
+      # Run one group at a time to avoid Start.gg timeouts or rate limits.
+      max-parallel: 1
       matrix:
         group: [1, 2, 3, 4]
 
